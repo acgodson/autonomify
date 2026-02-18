@@ -1,0 +1,22 @@
+.vscode
+.DS_Store
+.claude
+
+# env files
+.env
+.env.local
+.env*.local
+
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# data files with secrets
+**/data/*.json
+
+# misc
+*.pem
+*.log

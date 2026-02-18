@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    overflow-x: hidden;
+    overflow-y: scroll;
+  }
+  body {
+    overscroll-behavior: none;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+}
+
+/* Pixel/Glitch text effect */
+.pixel-text {
+  font-family: var(--font-space), monospace;
+  letter-spacing: 0.05em;
+  text-shadow:
+    0 0 0 transparent,
+    1px 1px 0 rgba(251, 191, 36, 0.3),
+    -1px -1px 0 rgba(96, 165, 250, 0.2);
+}
+
+.pixel-text::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 1px;
+  top: 0;
+  color: rgba(251, 191, 36, 0.5);
+  clip-path: inset(0 100% 0 0);
+  animation: glitch-1 3s infinite linear;
+}
+
+@keyframes glitch-1 {
+  0%, 100% { clip-path: inset(0 100% 0 0); }
+  5% { clip-path: inset(40% 0 40% 0); }
+  10% { clip-path: inset(0 100% 0 0); }
+}
+
+/* Glow animation for cards */
+@keyframes subtle-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.1); }
+  50% { box-shadow: 0 0 15px rgba(251, 191, 36, 0.2); }
+}
+
+.glow-card {
+  animation: subtle-glow 3s ease-in-out infinite;
+}
+
+/* Matrix-style scanline effect */
+.scanline::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    transparent 50%,
+    rgba(0, 0, 0, 0.03) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+/* Random spinning animation for cubes - subtle 1-2 rotations then stop */
+@keyframes randomSpin {
+  0% { transform: rotate(45deg); }
+  8% { transform: rotate(405deg); }
+  15%, 100% { transform: rotate(405deg); }
+}
+
+@keyframes randomSpin2 {
+  0% { transform: rotate(12deg); }
+  5% { transform: rotate(372deg); }
+  10% { transform: rotate(732deg); }
+  18%, 100% { transform: rotate(732deg); }
+}
+
+/* Twinkle animation for sparkles */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.5); }
+}
+
+.animate-twinkle {
+  animation: twinkle 2s ease-in-out infinite;
+}
+
+/* Draw animation for underline */
+@keyframes draw {
+  from { stroke-dashoffset: 300; }
+  to { stroke-dashoffset: 0; }
+}
+
+.animate-draw {
+  stroke-dasharray: 300;
+  animation: draw 1.5s ease-out forwards;
+}
+
+/* Gradient text for highlighted words */
+.gradient-text {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
+}
