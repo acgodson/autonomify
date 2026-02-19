@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "cd ../packages/autonomify-sdk && npm install --legacy-peer-deps && npx tsup src/index.ts --format esm --dts --clean",
+    "prebuild": "cd ../packages/autonomify-sdk && npm install --legacy-peer-deps && ./node_modules/.bin/tsup src/index.ts --format esm --dts --clean",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
