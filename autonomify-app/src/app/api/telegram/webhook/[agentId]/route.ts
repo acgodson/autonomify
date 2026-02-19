@@ -117,7 +117,13 @@ function getOrCreateBot(agent: AgentConfig): Bot {
 
     try {
       const response = await processWithLLM(agent, chatId, text)
-      await ctx.reply(response, { parse_mode: "Markdown" })
+      // Try Markdown first, fallback to plain text if parsing fails
+      try {
+        await ctx.reply(response, { parse_mode: "Markdown" })
+      } catch (markdownErr) {
+        // Markdown parsing failed, send as plain text
+        await ctx.reply(response)
+      }
     } catch (err) {
       console.error("LLM error:", err)
       console.error("Error stack:", err instanceof Error ? err.stack : "No stack")
