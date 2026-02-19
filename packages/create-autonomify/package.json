@@ -1,0 +1,40 @@
+{
+  "name": "create-autonomify",
+  "version": "0.1.0",
+  "description": "CLI to scaffold Autonomify agent projects",
+  "type": "module",
+  "bin": {
+    "create-autonomify": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --clean && pnpm run copy-templates",
+    "copy-templates": "cp -r src/templates dist/templates",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "ora": "^8.1.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/prompts": "^2.4.9",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0"
+  },
+  "keywords": [
+    "cli",
+    "autonomify",
+    "ai-agents",
+    "smart-contracts",
+    "scaffold"
+  ],
+  "author": "Autonomify",
+  "license": "MIT"
+}

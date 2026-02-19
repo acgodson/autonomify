@@ -1,0 +1,58 @@
+{
+  "name": "autonomify-sdk",
+  "version": "0.1.0",
+  "description": "Universal SDK for building AI agents that interact with smart contracts",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "peerDependencies": {
+    "ai": ">=3.0.0",
+    "zod": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "ai": "^3.4.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "zod": "^3.23.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "smart-contracts",
+    "web3",
+    "bnb",
+    "autonomify",
+    "llm",
+    "tools"
+  ],
+  "author": "Autonomify",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/autonomify/autonomify-sdk"
+  }
+}

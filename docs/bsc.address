@@ -1,0 +1,18 @@
+# BSC Testnet Deployments
+
+## AutonomifyExecutor
+- **Address**: `0xC62AeB774DF09a6C2554dC19f221BDc4DFfAD93C`
+- **Network**: BSC Testnet (Chain ID: 97)
+- **Explorer**: https://testnet.bscscan.com/address/0xC62AeB774DF09a6C2554dC19f221BDc4DFfAD93C
+
+## Functions
+```solidity
+execute(bytes32 agentId, address target, bytes data) → (bool, bytes)
+agentNonce(bytes32 agentId) → uint256
+usedNullifiers(bytes32) → bool
+```
+
+## Events
+```solidity
+Executed(bytes32 indexed agentId, address indexed target, bytes4 indexed selector, bytes32 nullifier, bool success, bytes result)
+```
