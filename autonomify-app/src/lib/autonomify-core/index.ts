@@ -77,14 +77,11 @@ export {
   encodeContractCall,
   encodeExecutorCall,
   buildTransaction,
-  buildSimulationTransaction,
   // Vercel AI SDK
   createAutonomifyTool,
-  createAutonomifySimulator,
   buildSystemPrompt,
   // OpenAI SDK
   createOpenAITool,
-  createOpenAISimulator,
   type OpenAITool,
   type OpenAIToolCall,
   type OpenAIToolResult,

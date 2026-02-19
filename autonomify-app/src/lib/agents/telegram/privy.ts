@@ -7,7 +7,7 @@
 
 import { PrivyClient } from "@privy-io/node"
 import { encodeFunctionData, type Abi } from "viem"
-import { bscTestnet } from "@/lib/autonomify-core"
+import { bscTestnet } from "@/lib/autonomify-core/chains"
 
 const PRIVY_APP_ID = process.env.PRIVY_ID!
 const PRIVY_APP_SECRET = process.env.PRIVY_SECRET!

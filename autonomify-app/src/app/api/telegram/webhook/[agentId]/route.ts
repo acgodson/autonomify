@@ -14,14 +14,13 @@ import {
   getAgent,
   getNativeBalance,
   executeDirectly,
+  buildSystemPrompt as buildAgentSystemPrompt,
   type AgentConfig,
 } from "@/lib/agents/telegram"
 import {
   bscTestnet,
   generateExport,
   createAutonomifyTool,
-  createAutonomifySimulator,
-  buildSystemPrompt,
   type UnsignedTransaction,
 } from "@/lib/autonomify-core"
 
@@ -116,28 +115,6 @@ function getOrCreateBot(agent: AgentConfig): Bot {
   return bot
 }
 
-/**
- * Build system prompt for the agent
- */
-function buildAgentPrompt(agent: AgentConfig): string {
-  if (!agent.wallet) throw new Error("Agent wallet required")
-
-  // Generate export format for consistent prompt building
-  const exportData = generateExport(bscTestnet, agent.contracts)
-
-  // Use SDK's prompt builder and customize for Telegram
-  const basePrompt = buildSystemPrompt(exportData)
-
-  return `${basePrompt}
-
-Your wallet address: ${agent.wallet.address}
-
-Additional context:
-- You are a Telegram bot named "${agent.name}"
-- Always be helpful and explain what you're doing
-- For write operations, explain what will happen before executing
-- After execution, provide the transaction hash and explorer link`
-}
 
 /**
  * Process message with LLM using the SDK's universal tool pattern
@@ -149,7 +126,8 @@ async function processWithLLM(
   if (!agent.wallet) throw new Error("Agent wallet required")
   const agentWallet = agent.wallet // Type narrowing
 
-  const systemPrompt = buildAgentPrompt(agent)
+  // Use the intelligent Telegram-specific prompt
+  const systemPrompt = buildAgentSystemPrompt(agent)
 
   // Generate export from agent's contracts
   const exportData = generateExport(bscTestnet, agent.contracts)
@@ -172,17 +150,13 @@ async function processWithLLM(
     signAndSend,
   })
 
-  // Create simulation tool using our SDK
-  const simulateTool = createAutonomifySimulator(exportData)
-
   const result = await generateText({
     model: openai("gpt-4o-mini"),
     system: systemPrompt,
     prompt: userMessage,
     tools: {
-      // Use SDK-generated tools
+      // Use SDK-generated tool
       autonomify_execute: autonomifyTool,
-      autonomify_simulate: simulateTool,
 
       // Balance check tool (specific to our Telegram implementation)
       get_balance: tool({
