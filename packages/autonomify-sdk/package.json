@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
     "viem": "^2.21.0"
   },
   "peerDependencies": {
@@ -40,7 +41,6 @@
   "devDependencies": {
     "ai": "^3.4.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0",
     "zod": "^3.23.0"
   },
   "keywords": [
