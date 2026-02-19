@@ -15,6 +15,11 @@ import {
   getNativeBalance,
   executeDirectly,
   buildSystemPrompt as buildAgentSystemPrompt,
+  getConversationHistory,
+  addUserMessage,
+  addAssistantMessage,
+  clearConversation,
+  pruneOldMessages,
   type AgentConfig,
 } from "@/lib/agents/telegram"
 import {
@@ -52,7 +57,8 @@ function getOrCreateBot(agent: AgentConfig): Bot {
         `Commands:\n` +
         `/wallet - Show my wallet address\n` +
         `/balance - Check my BNB balance\n` +
-        `/contracts - List available contracts\n\n` +
+        `/contracts - List available contracts\n` +
+        `/clear - Clear conversation history\n\n` +
         `Or just tell me what you want to do!`,
       { parse_mode: "Markdown" }
     )
@@ -95,18 +101,26 @@ function getOrCreateBot(agent: AgentConfig): Bot {
     await ctx.reply(`Contracts:\n\n${list}`, { parse_mode: "Markdown" })
   })
 
+  bot.command("clear", async (ctx) => {
+    const chatId = ctx.chat.id.toString()
+    await clearConversation(agent.id, chatId)
+    await ctx.reply("Conversation history cleared. Starting fresh!")
+  })
+
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text
+    const chatId = ctx.chat.id.toString()
 
     if (text.startsWith("/")) return
 
     await ctx.replyWithChatAction("typing")
 
     try {
-      const response = await processWithLLM(agent, text)
+      const response = await processWithLLM(agent, chatId, text)
       await ctx.reply(response, { parse_mode: "Markdown" })
     } catch (err) {
       console.error("LLM error:", err)
+      console.error("Error stack:", err instanceof Error ? err.stack : "No stack")
       await ctx.reply("Sorry, I encountered an error processing your request.")
     }
   })
@@ -118,9 +132,11 @@ function getOrCreateBot(agent: AgentConfig): Bot {
 
 /**
  * Process message with LLM using the SDK's universal tool pattern
+ * Now includes conversation history for context
  */
 async function processWithLLM(
   agent: AgentConfig,
+  chatId: string,
   userMessage: string
 ): Promise<string> {
   if (!agent.wallet) throw new Error("Agent wallet required")
@@ -128,6 +144,12 @@ async function processWithLLM(
 
   // Use the intelligent Telegram-specific prompt
   const systemPrompt = buildAgentSystemPrompt(agent)
+
+  // Get conversation history for this chat
+  const history = await getConversationHistory(agent.id, chatId)
+
+  // Add the new user message to history
+  await addUserMessage(agent.id, chatId, userMessage)
 
   // Generate export from agent's contracts
   const exportData = generateExport(bscTestnet, agent.contracts)
@@ -150,10 +172,16 @@ async function processWithLLM(
     signAndSend,
   })
 
+  // Build messages array with history + new message
+  const messages = [
+    ...history,
+    { role: "user" as const, content: userMessage },
+  ]
+
   const result = await generateText({
     model: openai("gpt-4o-mini"),
     system: systemPrompt,
-    prompt: userMessage,
+    messages,
     tools: {
       // Use SDK-generated tool
       autonomify_execute: autonomifyTool,
@@ -173,7 +201,15 @@ async function processWithLLM(
     maxSteps: 5,
   })
 
-  return result.text || "I processed your request but have no response."
+  const responseText = result.text || "I processed your request but have no response."
+
+  // Save assistant response to history
+  await addAssistantMessage(agent.id, chatId, responseText)
+
+  // Periodically prune old messages
+  await pruneOldMessages(agent.id, chatId)
+
+  return responseText
 }
 
 export async function POST(

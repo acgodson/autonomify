@@ -59,3 +59,13 @@ export {
 
 // Prompt Builder
 export { buildSystemPrompt, buildToolDescriptions } from "./prompt"
+
+// Conversation History
+export {
+  getConversationHistory,
+  addUserMessage,
+  addAssistantMessage,
+  addToolMessage,
+  clearConversation,
+  pruneOldMessages,
+} from "./conversation"
