@@ -207,6 +207,25 @@ async function processWithLLM(
     maxSteps: 5,
   })
 
+  // Debug logging
+  console.log("LLM result steps:", result.steps?.length || 0)
+  console.log("LLM result text:", result.text?.slice(0, 200) || "(empty)")
+  if (result.steps) {
+    for (const step of result.steps) {
+      console.log("Step type:", step.stepType)
+      if (step.toolCalls?.length) {
+        for (const tc of step.toolCalls) {
+          console.log("Tool call:", tc.toolName, JSON.stringify(tc.args).slice(0, 200))
+        }
+      }
+      if (step.toolResults?.length) {
+        for (const tr of step.toolResults) {
+          console.log("Tool result:", tr.toolName, JSON.stringify(tr.result).slice(0, 200))
+        }
+      }
+    }
+  }
+
   const responseText = result.text || "I processed your request but have no response."
 
   // Save assistant response to history
