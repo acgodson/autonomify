@@ -15,7 +15,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "@privy-io/node": "^0.9.0",
     "ai": "3",
-    "autonomify-sdk": "workspace:*",
+    "autonomify-sdk": "file:../packages/autonomify-sdk",
     "drizzle-orm": "^0.45.1",
     "grammy": "^1.40.0",
     "next": "^14.2.21",
