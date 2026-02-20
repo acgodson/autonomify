@@ -1,0 +1,66 @@
+/**
+ * Agent Module
+ *
+ * Core agent functionality - channel-agnostic business logic.
+ * This module provides:
+ * - Agent CRUD operations (store)
+ * - Wallet management (wallet)
+ * - LLM-powered execution (runner)
+ * - Conversation history (conversation)
+ *
+ */
+
+
+export type {
+  Agent,
+  AgentWallet,
+  AgentContract,
+  ChannelType,
+  AgentType,
+  ExecuteParams,
+  SimulateResult,
+  ExecuteResult,
+  ApiResponse,
+  Chain,
+  FunctionExport,
+} from "./types"
+
+// Agent Store (CRUD)
+export {
+  createAgent,
+  getAgent,
+  listAgents,
+  updateAgent,
+  deleteAgent,
+  addContractToAgent,
+  removeContractFromAgent,
+  type CreateAgentOptions,
+} from "./store"
+
+export {
+  buildAgentExport,
+  buildAgentPrompt,
+  createAgentTool,
+  validateAgentCall,
+  simulate,
+  execute,
+  getNativeBalance,
+} from "./runner"
+
+
+export {
+  createAgentWallet,
+  getWallet,
+  executeViaExecutor,
+  executeDirectly,
+} from "./wallet"
+
+
+export {
+  getConversationHistory,
+  addUserMessage,
+  addAssistantMessage,
+  addToolMessage,
+  clearConversation,
+  pruneOldMessages,
+} from "./conversation"

@@ -2,10 +2,11 @@
  * ABI Fetcher
  *
  * Fetches verified contract ABIs from block explorer APIs.
+ * Uses SDK's chain configuration as the source of truth.
  */
 
 import type { Abi } from "viem"
-import type { ChainConfig } from "./types"
+import { getChain, type Chain } from "autonomify-sdk"
 
 const ETHERSCAN_V2_API = "https://api.etherscan.io/v2/api"
 
@@ -16,17 +17,21 @@ interface EtherscanResponse {
 }
 
 export async function fetchAbi(
-  chain: ChainConfig,
+  chainId: number,
   address: string
 ): Promise<{ abi: Abi; source: string }> {
-  const apiKey = chain.explorerApiKey || process.env.BSCSCAN_API_KEY
+  const chain = getChain(chainId)
+  if (!chain) {
+    throw new Error(`Unknown chain ID: ${chainId}`)
+  }
 
+  const apiKey = process.env.BSCSCAN_API_KEY
   if (!apiKey) {
     throw new Error("Explorer API key is required for fetching ABIs")
   }
 
   const params = new URLSearchParams({
-    chainid: chain.id.toString(),
+    chainid: chainId.toString(),
     module: "contract",
     action: "getabi",
     address: address,

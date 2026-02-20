@@ -1,81 +1,81 @@
-/**
- * Autonomify SDK
- *
- * Universal SDK for building AI agents that interact with smart contracts.
- * Works with any wallet adapter - you provide the signing logic.
- *
- * @example
- * ```typescript
- * // Vercel AI SDK
- * import { createAutonomifyTool, buildSystemPrompt } from 'autonomify-sdk'
- * import { generateText } from 'ai'
- * import { openai } from '@ai-sdk/openai'
- *
- * const tool = createAutonomifyTool({
- *   export: config,
- *   agentId: '0x...',
- *   signAndSend: async (tx) => wallet.sendTransaction(tx)
- * })
- *
- * const { text } = await generateText({
- *   model: openai('gpt-4'),
- *   tools: { autonomify_execute: tool },
- *   system: buildSystemPrompt(config),
- *   prompt: 'Transfer 100 USDT to 0xABC'
- * })
- * ```
- *
- * @example
- * ```typescript
- * // OpenAI SDK
- * import { createOpenAITool, buildSystemPrompt } from 'autonomify-sdk'
- * import OpenAI from 'openai'
- *
- * const { tools, handler } = createOpenAITool({
- *   export: config,
- *   agentId: '0x...',
- *   signAndSend: async (tx) => wallet.sendTransaction(tx)
- * })
- *
- * const response = await openai.chat.completions.create({
- *   model: 'gpt-4',
- *   messages: [{ role: 'user', content: 'Transfer 100 USDT' }],
- *   tools,
- * })
- * ```
- */
-
-// Types
 export type {
-  AutonomifyExport,
-  ContractExport,
-  FunctionExport,
-  FunctionParam,
   ChainConfig,
+  FunctionParam,
+  FunctionExport,
+  ContractExport,
+  AutonomifyExport,
   ExecuteParams,
   UnsignedTransaction,
   ExecuteResult,
   SignAndSendFn,
-  AutonomifyToolConfig,
+  ToolConfig,
+  StructuredCall,
 } from "./types"
 
-// Encoder (for custom integrations)
 export {
   encodeContractCall,
   encodeExecutorCall,
   buildTransaction,
-} from "./encoder"
+} from "./core/encoder"
 
-// Vercel AI SDK integration
 export {
-  createAutonomifyTool,
-  buildSystemPrompt,
-} from "./vercel-ai"
+  EXECUTOR_ADDRESSES,
+  EXECUTOR_ABI,
+  getExecutorAddress,
+  toBytes32,
+} from "./core/executor"
 
-// OpenAI SDK integration
+export {
+  findFunction,
+  isReadOnly,
+  serializeBigInts,
+  argsToArray,
+} from "./core/utils"
+
+export {
+  validateCall,
+  type ValidationResult,
+  type ValidationError,
+} from "./core/validate"
+
+export {
+  createTool,
+  buildPrompt,
+  getPrompt,
+  executeSchema,
+  executeCall,
+  type Tool,
+  type ExecuteSchema,
+} from "./tool"
+
+export {
+  createVercelTool,
+  forVercelAI,
+  buildSystemPrompt,
+} from "./adapters/vercel-ai"
+
 export {
   createOpenAITool,
-  type OpenAITool,
+  forOpenAI,
+  type OpenAIToolDef,
   type OpenAIToolCall,
-  type OpenAIToolResult,
-} from "./openai"
+} from "./adapters/openai"
+
+export {
+  chains,
+  getChain,
+  getExplorerUrl,
+  getAddressUrl,
+  getMainnets,
+  getTestnets,
+  type Chain,
+} from "./chains"
+
+export {
+  detectType,
+  detectPattern,
+  getPattern,
+  hasAdmin,
+  type ContractType,
+  type ContractPattern,
+} from "./knowledge/patterns"

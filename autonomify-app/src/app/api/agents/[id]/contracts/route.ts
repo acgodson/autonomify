@@ -1,25 +1,54 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAgent, addContractToAgent } from "@/lib/agents/telegram"
+import { getChain } from "autonomify-sdk"
+import {
+  getAgent,
+  addContractToAgent,
+  type AgentContract,
+  type ApiResponse,
+} from "@/lib/agent"
 import {
   fetchAbi,
   isValidAddress,
   resolveMetadata,
   extractFunctions,
-  getChain,
-  type ApiResponse,
-  type ContractContext,
-} from "@/lib/autonomify-core"
+} from "@/lib/contracts"
 
 interface AddContractBody {
-  chain: string
+  chain?: string // Chain ID as string (e.g., "97" or "56") or legacy name (e.g., "bscTestnet")
+  chainId?: number // Chain ID as number
   address: string
 }
 
 interface ContractResponse {
   address: string
   chain: string
+  chainId: number
   metadata: Record<string, unknown>
   functionCount: number
+}
+
+// Map legacy chain names to chain IDs
+function resolveChainId(chainParam?: string | number): number {
+  if (typeof chainParam === "number") return chainParam
+  if (!chainParam) return 97 // Default to BSC Testnet
+
+  // Try parsing as number first
+  const parsed = parseInt(chainParam, 10)
+  if (!isNaN(parsed)) return parsed
+
+  // Legacy name mapping
+  const legacyNames: Record<string, number> = {
+    bscTestnet: 97,
+    bscMainnet: 56,
+    bsc: 56,
+    ethereum: 1,
+    sepolia: 11155111,
+    polygon: 137,
+    arbitrum: 42161,
+    base: 8453,
+  }
+
+  return legacyNames[chainParam] || 97
 }
 
 export async function GET(
@@ -38,6 +67,7 @@ export async function GET(
   const contracts: ContractResponse[] = agent.contracts.map((c) => ({
     address: c.address,
     chain: c.chain.name,
+    chainId: c.chainId,
     metadata: c.metadata,
     functionCount: c.functions.length,
   }))
@@ -72,7 +102,6 @@ export async function POST(
     )
   }
 
-  const chainId = body.chain || "bscTestnet"
   const address = body.address
 
   if (!address || !isValidAddress(address)) {
@@ -82,21 +111,24 @@ export async function POST(
     )
   }
 
+  const chainId = body.chainId || resolveChainId(body.chain)
   const chain = getChain(chainId)
+
   if (!chain) {
     return NextResponse.json<ApiResponse>(
-      { ok: false, error: `Unknown chain: ${chainId}` },
+      { ok: false, error: `Unknown chain ID: ${chainId}` },
       { status: 400 }
     )
   }
 
   try {
-    const { abi } = await fetchAbi(chain, address)
+    const { abi } = await fetchAbi(chainId, address)
     const metadata = await resolveMetadata(chain, address, abi)
     const functions = extractFunctions(abi)
 
-    const contract: ContractContext = {
+    const contract: AgentContract = {
       address,
+      chainId,
       chain,
       abi,
       metadata,
@@ -117,6 +149,7 @@ export async function POST(
       data: {
         address,
         chain: chain.name,
+        chainId,
         metadata,
         functionCount: functions.length,
       },

@@ -2,10 +2,10 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import type { FunctionInfo } from "@/lib/autonomify-core"
+import type { FunctionExport } from "autonomify-sdk"
 
 interface FunctionListProps {
-  functions: FunctionInfo[]
+  functions: FunctionExport[]
   descriptions?: Record<string, string>
 }
 
@@ -132,7 +132,7 @@ function FunctionCard({
   variant,
   onHoverChange,
 }: {
-  fn: FunctionInfo
+  fn: FunctionExport
   description?: string
   variant: "read" | "write"
   onHoverChange: (isHovered: boolean) => void

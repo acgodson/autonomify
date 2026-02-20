@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Image from "next/image"
 import { FunctionList } from "@/components/function-list"
-import type { FunctionInfo } from "@/lib/autonomify-core"
+import type { FunctionExport } from "autonomify-sdk"
 import { useWallet } from "@/lib/wallet"
 
 interface ContractAnalysis {
@@ -17,7 +17,7 @@ interface ContractData {
   address: string
   chain: string
   metadata: Record<string, unknown>
-  functions: FunctionInfo[]
+  functions: FunctionExport[]
   analysis?: ContractAnalysis
 }
 

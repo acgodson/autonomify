@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
-import type { ApiResponse, FunctionInfo } from "@/lib/autonomify-core"
+import type { FunctionExport } from "autonomify-sdk"
+import { type ApiResponse } from "@/lib/agent"
 
 interface AnalyzeBody {
   address: string
   metadata: Record<string, unknown>
-  functions: FunctionInfo[]
+  functions: FunctionExport[]
 }
 
 interface ContractAnalysis {

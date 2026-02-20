@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAgent, deleteAgent, type AgentConfig, type AgentType } from "@/lib/agents/telegram"
-import type { ApiResponse } from "@/lib/autonomify-core"
+import {
+  getAgent,
+  deleteAgent,
+  type Agent,
+  type ChannelType,
+  type ApiResponse,
+} from "@/lib/agent"
 
 interface AgentDetail {
   id: string
   name: string
-  type: AgentType
+  type: ChannelType
   walletAddress?: string
   agentIdBytes?: string
   contracts: {
@@ -18,17 +23,17 @@ interface AgentDetail {
   createdAt: number
 }
 
-function toDetail(agent: AgentConfig): AgentDetail {
+function toDetail(agent: Agent): AgentDetail {
   return {
     id: agent.id,
     name: agent.name,
-    type: agent.type,
+    type: agent.channel,
     walletAddress: agent.wallet?.address,
     agentIdBytes: agent.agentIdBytes,
     contracts: agent.contracts.map((c) => ({
       address: c.address,
       chain: c.chain.name,
-      chainId: c.chain.id,
+      chainId: c.chainId,
       metadata: c.metadata,
       functionCount: c.functions.length,
     })),

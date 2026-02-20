@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAgent } from "@/lib/agents/telegram"
-import type { ApiResponse } from "@/lib/autonomify-core"
+import { getAgent, type ApiResponse } from "@/lib/agent"
 
 interface WebhookResponse {
   webhookUrl: string
@@ -25,7 +24,7 @@ export async function POST(
 
   try {
     const telegramRes = await fetch(
-      `https://api.telegram.org/bot${agent.telegramBotToken}/setWebhook`,
+      `https://api.telegram.org/bot${agent.channelToken}/setWebhook`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -73,7 +72,7 @@ export async function GET(
 
   try {
     const telegramRes = await fetch(
-      `https://api.telegram.org/bot${agent.telegramBotToken}/getWebhookInfo`
+      `https://api.telegram.org/bot${agent.channelToken}/getWebhookInfo`
     )
 
     const telegramData = await telegramRes.json()
@@ -106,7 +105,7 @@ export async function DELETE(
 
   try {
     const telegramRes = await fetch(
-      `https://api.telegram.org/bot${agent.telegramBotToken}/deleteWebhook`
+      `https://api.telegram.org/bot${agent.channelToken}/deleteWebhook`
     )
 
     const telegramData = await telegramRes.json()

@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import type { FunctionInfo } from "@/lib/autonomify-core"
+import type { FunctionExport } from "autonomify-sdk"
 
 interface ResolvedContract {
   address: string
   chain: string
   metadata: Record<string, unknown>
-  functions: FunctionInfo[]
+  functions: FunctionExport[]
 }
 
 interface ContractInputProps {
