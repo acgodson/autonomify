@@ -55,9 +55,34 @@ flowchart LR
 **Current:**
 - BSC Testnet only
 - Requires verified contracts
-- Manual wallet funding
+- Shared executor (all agents use same contract)
 
-**Roadmap:**
-- Multi-chain support
-- Mainnet deployment
-- Agent marketplace
+**Security Roadmap:**
+
+```mermaid
+flowchart TB
+    subgraph Now["Current (Hackathon)"]
+        W1[Agent Wallet] --> E1[Shared Executor]
+        W2[Agent Wallet] --> E1
+        E1 --> T[Target Contracts]
+    end
+    subgraph Future["Future (Production)"]
+        W3[Agent Wallet] --> E2[Agent's Own Executor]
+        W4[Agent Wallet] --> E3[Agent's Own Executor]
+        E2 --> T2[Target Contracts]
+        E3 --> T2
+    end
+```
+
+**Per-Agent Executor (CREATE2):**
+1. Each agent gets its own Executor via CREATE2 (deterministic address)
+2. Address computed BEFORE deployment from `factory + agentId`
+3. Privy wallet policy whitelists ONLY that executor address
+4. Tokens held in agent's personal executor = full isolation
+5. Deploy lazily on first transaction (gas efficient)
+
+**Benefits:**
+- Agent can ONLY call its own executor (policy enforced)
+- Even if compromised, can't drain to arbitrary addresses
+- Full audit trail per agent
+- Token isolation between agents

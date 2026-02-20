@@ -67,18 +67,13 @@ function dbRowToAgentConfig(
 export interface CreateAgentOptions {
   name: string
   type: AgentType
+  ownerAddress: string
   telegramBotToken?: string
 }
 
 export async function createAgent(
-  nameOrOptions: string | CreateAgentOptions,
-  telegramBotToken?: string
+  options: CreateAgentOptions
 ): Promise<AgentConfig> {
-  // Handle legacy signature: createAgent(name, token)
-  const options: CreateAgentOptions =
-    typeof nameOrOptions === "string"
-      ? { name: nameOrOptions, type: "telegram", telegramBotToken }
-      : nameOrOptions
 
   if (options.type === "self_hosted") {
     // Self-hosted: just generate agentIdBytes, no wallet
@@ -89,6 +84,7 @@ export async function createAgent(
       .values({
         name: options.name,
         type: "self_hosted",
+        ownerAddress: options.ownerAddress.toLowerCase(),
         agentIdBytes,
       })
       .returning()
@@ -111,6 +107,7 @@ export async function createAgent(
     .values({
       name: options.name,
       type: options.type,
+      ownerAddress: options.ownerAddress.toLowerCase(),
       telegramBotToken: options.telegramBotToken,
       walletId: wallet.privyWalletId,
       walletAddress: wallet.address,
@@ -142,8 +139,9 @@ export async function getAgent(id: string): Promise<AgentConfig | undefined> {
   return dbRowToAgentConfig(agent, contracts)
 }
 
-export async function listAgents(): Promise<AgentConfig[]> {
+export async function listAgents(ownerAddress?: string): Promise<AgentConfig[]> {
   const allAgents = await db.query.agents.findMany({
+    where: ownerAddress ? eq(agents.ownerAddress, ownerAddress.toLowerCase()) : undefined,
     orderBy: (agents, { desc }) => [desc(agents.createdAt)],
   })
 

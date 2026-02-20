@@ -5,6 +5,7 @@ import type { ApiResponse } from "@/lib/autonomify-core"
 interface CreateAgentBody {
   name: string
   type?: AgentType
+  ownerAddress: string
   telegramBotToken?: string
 }
 
@@ -30,8 +31,17 @@ function toPublic(agent: AgentConfig): AgentPublic {
   }
 }
 
-export async function GET() {
-  const agents = await listAgents()
+export async function GET(request: NextRequest) {
+  const ownerAddress = request.headers.get("x-owner-address")
+
+  if (!ownerAddress) {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: "Missing owner address" },
+      { status: 401 }
+    )
+  }
+
+  const agents = await listAgents(ownerAddress)
 
   return NextResponse.json<ApiResponse<AgentPublic[]>>({
     ok: true,
@@ -58,6 +68,13 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  if (!body.ownerAddress || typeof body.ownerAddress !== "string") {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: "Missing owner address" },
+      { status: 401 }
+    )
+  }
+
   const agentType = body.type || "telegram"
 
   // Validate hosted agents need a bot token
@@ -72,6 +89,7 @@ export async function POST(request: NextRequest) {
     const agent = await createAgent({
       name: body.name,
       type: agentType,
+      ownerAddress: body.ownerAddress,
       telegramBotToken: body.telegramBotToken,
     })
 

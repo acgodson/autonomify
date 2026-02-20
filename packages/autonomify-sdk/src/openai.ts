@@ -31,13 +31,38 @@
  * ```
  */
 
-import { buildTransaction, buildSimulationTransaction } from "./encoder"
+import { createPublicClient, http, decodeFunctionResult, type AbiFunction } from "viem"
+import { buildTransaction, encodeContractCall } from "./encoder"
 import type {
   AutonomifyToolConfig,
   ExecuteParams,
   ExecuteResult,
   AutonomifyExport,
 } from "./types"
+
+/**
+ * Find function ABI by name
+ */
+function findFunction(
+  exportData: AutonomifyExport,
+  contractAddress: `0x${string}`,
+  functionName: string
+): AbiFunction | undefined {
+  const contract = exportData.contracts[contractAddress]
+  if (!contract) return undefined
+
+  return contract.abi.find(
+    (item): item is AbiFunction =>
+      item.type === "function" && item.name === functionName
+  )
+}
+
+/**
+ * Check if function is read-only (view/pure)
+ */
+function isReadOnly(fn: AbiFunction): boolean {
+  return fn.stateMutability === "view" || fn.stateMutability === "pure"
+}
 
 /**
  * OpenAI tool definition format
@@ -77,9 +102,18 @@ export interface OpenAIToolResult {
 
 /**
  * Create OpenAI-compatible tool definitions and handler
+ *
+ * Automatically routes:
+ * - view/pure functions → free eth_call (no gas)
+ * - nonpayable/payable functions → executor contract (requires gas)
  */
 export function createOpenAITool(config: AutonomifyToolConfig): OpenAIToolResult {
   const { export: exportData, agentId, signAndSend } = config
+
+  // Create public client for free read calls
+  const publicClient = createPublicClient({
+    transport: http(exportData.chain.rpc),
+  })
 
   const contractList = Object.entries(exportData.contracts)
     .map(([addr, c]) => `${c.name} (${addr})`)
@@ -128,8 +162,56 @@ export function createOpenAITool(config: AutonomifyToolConfig): OpenAIToolResult
 
     try {
       const params = JSON.parse(toolCall.function.arguments)
+      const contractAddress = params.contractAddress as `0x${string}`
+      const contract = exportData.contracts[contractAddress]
+
+      if (!contract) {
+        return {
+          success: false,
+          error: `Contract ${contractAddress} not found in export`,
+        }
+      }
+
+      // Find the function in the ABI
+      const fn = findFunction(exportData, contractAddress, params.functionName)
+
+      if (!fn) {
+        return {
+          success: false,
+          error: `Function ${params.functionName} not found in contract`,
+        }
+      }
+
+      // For view/pure functions, use free eth_call (no gas needed)
+      if (isReadOnly(fn)) {
+        const calldata = encodeContractCall(contract.abi, params.functionName, params.args || [])
+
+        const result = await publicClient.call({
+          to: contractAddress,
+          data: calldata,
+        })
+
+        // Decode the result
+        let decodedResult: unknown
+        try {
+          decodedResult = decodeFunctionResult({
+            abi: contract.abi,
+            functionName: params.functionName,
+            data: result.data!,
+          })
+        } catch {
+          decodedResult = result.data
+        }
+
+        return {
+          success: true,
+          readResult: decodedResult,
+        }
+      }
+
+      // For write functions, route through executor
       const executeParams: ExecuteParams = {
-        contractAddress: params.contractAddress as `0x${string}`,
+        contractAddress,
         functionName: params.functionName,
         args: params.args || [],
         value: params.value,
@@ -153,79 +235,3 @@ export function createOpenAITool(config: AutonomifyToolConfig): OpenAIToolResult
   return { tools, handler }
 }
 
-/**
- * Create OpenAI-compatible simulator tool (no signing)
- */
-export function createOpenAISimulator(exportData: AutonomifyExport): OpenAIToolResult {
-  const contractList = Object.entries(exportData.contracts)
-    .map(([addr, c]) => `${c.name} (${addr})`)
-    .join(", ")
-
-  const tools: OpenAITool[] = [
-    {
-      type: "function",
-      function: {
-        name: "autonomify_simulate",
-        description: `Simulate a smart contract function call (dry run). Available contracts: ${contractList}`,
-        parameters: {
-          type: "object",
-          properties: {
-            contractAddress: {
-              type: "string",
-              description: "The contract address to call",
-            },
-            functionName: {
-              type: "string",
-              description: "The function name to call",
-            },
-            args: {
-              type: "array",
-              items: {},
-              description: "Function arguments in order",
-            },
-            value: {
-              type: "string",
-              description: "BNB to send (for payable functions)",
-            },
-          },
-          required: ["contractAddress", "functionName", "args"],
-        },
-      },
-    },
-  ]
-
-  const handler = async (toolCall: OpenAIToolCall): Promise<ExecuteResult> => {
-    // For simulation, we just validate the params without executing
-    try {
-      const params = JSON.parse(toolCall.function.arguments)
-      const contract = exportData.contracts[params.contractAddress as `0x${string}`]
-
-      if (!contract) {
-        return {
-          success: false,
-          error: `Contract ${params.contractAddress} not found`,
-        }
-      }
-
-      const fn = contract.functions.find(f => f.name === params.functionName)
-      if (!fn) {
-        return {
-          success: false,
-          error: `Function ${params.functionName} not found in contract`,
-        }
-      }
-
-      return {
-        success: true,
-        simulationResult: `Would call ${params.functionName} on ${contract.name}`,
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Simulation failed",
-      }
-    }
-  }
-
-  return { tools, handler }
-}

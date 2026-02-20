@@ -85,7 +85,8 @@ export interface UnsignedTransaction {
  */
 export interface ExecuteResult {
   success: boolean
-  txHash?: string
+  txHash?: string               // For write functions
+  readResult?: unknown          // For view/pure functions (decoded return value)
   error?: string
   simulationResult?: string
 }
@@ -101,6 +102,6 @@ export type SignAndSendFn = (tx: UnsignedTransaction) => Promise<string>
  */
 export interface AutonomifyToolConfig {
   export: AutonomifyExport
-  agentId: `0x${string}`
+  agentId: string  // UUID or hex string - will be converted to bytes32
   signAndSend: SignAndSendFn
 }

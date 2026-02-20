@@ -2,7 +2,7 @@
 
 **Turn any verified BNB contract into an AI agent.**
 
-Autonomify is a universal SDK that lets AI agents execute onchain transactions securely. Paste a contract address, get a tool the LLM can use, bring your own wallet — or let us host a Telegram bot for you.
+Autonomify is a universal SDK that lets AI agents execute onchain transactions securely. Paste a contract address, get a tool the LLM can use, bring your own agentic wallet — or let us host one for you.
 
 ## Contents
 
@@ -12,7 +12,14 @@ Autonomify is a universal SDK that lets AI agents execute onchain transactions s
 
 ## Quick Start
 
-### Option 1: Self-hosted Agent
+### Option 1: Hosted Telegram Bot (Easiest)
+
+1. Go to [autonomify.vercel.app](https://autonomify.vercel.app)
+2. Paste a contract address → Click "Launch Agent" → Choose "Telegram"
+3. Enter your bot token (from [@BotFather](https://t.me/BotFather))
+4. Start chatting with your bot — we handle the wallet ([via Privy](https://docs.privy.io)) and execution
+
+### Option 2: Self-hosted Agent
 
 1. Go to [autonomify.vercel.app](https://autonomify.vercel.app)
 2. Paste a contract address → Click "Launch Agent" → Choose "Self-hosted"
@@ -42,20 +49,13 @@ const { text } = await generateText({
 })
 ```
 
-### Option 2: Hosted Telegram Bot
-
-1. Go to [autonomify.vercel.app](https://autonomify.vercel.app)
-2. Paste a contract address → Click "Launch Agent" → Choose "Telegram"
-3. Enter your bot token (from [@BotFather](https://t.me/BotFather))
-4. Start chatting with your agent — we handle the wallet [via privy.io](https://docs.privy.io) and execution
-
 ## What We Built
 
 | Component | Description |
 |-----------|-------------|
 | **autonomify-sdk** | Universal tool for AI agents to call any contract |
 | **create-autonomify** | CLI to scaffold agent projects (Vercel AI / OpenAI) |
-| **autonomify-app** | Dashboard + API + hosted Telegram agents |
+| **autonomify-app** | Dashboard + API + hosted Telegram agents as reference implementations |
 | **AutonomifyExecutor** | On-chain router with audit trail |
 
 ## Repository

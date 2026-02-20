@@ -2,7 +2,7 @@ import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import * as dotenv from "dotenv";
 
-dotenv.config({ path: "../autonomify-build/.env" });
+dotenv.config({ path: "../autonomify-app/.env" });
 
 const PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000001";
 const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY || "";
