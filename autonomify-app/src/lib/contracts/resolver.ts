@@ -2,20 +2,29 @@
  * Contract Resolver
  *
  * Resolves contract metadata and functions from verified contracts.
+ * Uses SDK types and chains as the source of truth.
  */
 
-import { createPublicClient, http, type Abi, type AbiFunction } from "viem"
-import type { ChainConfig, FunctionInfo, ResolvedContract } from "./types"
-import { fetchAbi, isValidAddress } from "./abi-fetcher"
-import { getChain } from "./chains"
+import { createPublicClient, http, type Abi, type AbiFunction, type AbiParameter } from "viem"
+import { getChain, type Chain, type FunctionExport } from "autonomify-sdk"
+import { fetchAbi, isValidAddress } from "./fetcher"
+
+export interface ResolvedContract {
+  address: string
+  chainId: number
+  chain: Chain
+  abi: Abi
+  metadata: Record<string, unknown>
+  functions: FunctionExport[]
+}
 
 export async function resolveMetadata(
-  chain: ChainConfig,
+  chain: Chain,
   address: string,
   abi: Abi
 ): Promise<Record<string, unknown>> {
   const client = createPublicClient({
-    transport: http(chain.rpc),
+    transport: http(chain.rpc[0]),
   })
 
   const zeroParamViewFunctions = abi.filter(
@@ -55,7 +64,7 @@ export async function resolveMetadata(
   return metadata
 }
 
-export function extractFunctions(abi: Abi): FunctionInfo[] {
+export function extractFunctions(abi: Abi): FunctionExport[] {
   return abi
     .filter((item): item is AbiFunction => item.type === "function")
     .map((fn) => {
@@ -65,16 +74,21 @@ export function extractFunctions(abi: Abi): FunctionInfo[] {
       return {
         name: fn.name,
         signature,
-        abi: fn,
         stateMutability: fn.stateMutability,
-        inputs: fn.inputs,
-        outputs: fn.outputs,
+        inputs: fn.inputs.map((i) => ({
+          name: i.name || "",
+          type: i.type,
+        })),
+        outputs: fn.outputs?.map((o) => ({
+          name: o.name || "",
+          type: o.type,
+        })) || [],
       }
     })
 }
 
 export interface ResolveContractOptions {
-  chainId: string
+  chainId: number
   address: string
 }
 
@@ -92,15 +106,16 @@ export async function resolveContract(
 
   const chain = getChain(chainId)
   if (!chain) {
-    throw new Error(`Unknown chain: ${chainId}`)
+    throw new Error(`Unknown chain ID: ${chainId}`)
   }
 
-  const { abi } = await fetchAbi(chain, address)
+  const { abi } = await fetchAbi(chainId, address)
   const functions = extractFunctions(abi)
   const metadata = await resolveMetadata(chain, address, abi)
 
   return {
     address,
+    chainId,
     chain,
     abi,
     metadata,
@@ -108,4 +123,4 @@ export async function resolveContract(
   }
 }
 
-export { isValidAddress } from "./abi-fetcher"
+export { isValidAddress } from "./fetcher"

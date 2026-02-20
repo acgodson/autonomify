@@ -6,8 +6,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getAgent } from "@/lib/agents/telegram"
-import { generateExport, getChainById, type ApiResponse, type AutonomifyExport } from "@/lib/autonomify-core"
+import type { AutonomifyExport } from "autonomify-sdk"
+import {
+  getAgent,
+  buildAgentExport,
+  type ApiResponse,
+} from "@/lib/agent"
 
 export async function GET(
   _request: NextRequest,
@@ -29,18 +33,7 @@ export async function GET(
     )
   }
 
-  // Get chain from first contract (assuming all contracts are on same chain)
-  const chainId = agent.contracts[0].chain.id
-  const chain = getChainById(chainId)
-
-  if (!chain) {
-    return NextResponse.json<ApiResponse>(
-      { ok: false, error: "Unknown chain" },
-      { status: 400 }
-    )
-  }
-
-  const exportData = generateExport(chain, agent.contracts)
+  const exportData = buildAgentExport(agent)
 
   // Add agent-specific info for self-hosted usage
   const response: AutonomifyExport & { agentId: string; agentName: string } = {

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAgent, simulate, execute } from "@/lib/agents/telegram"
-import type { ApiResponse } from "@/lib/autonomify-core"
+import {
+  getAgent,
+  simulate,
+  execute,
+  type ApiResponse,
+} from "@/lib/agent"
 
 interface ExecuteBody {
   contractAddress: string
   functionName: string
-  args: unknown[]
+  args: Record<string, unknown> | unknown[] // Support both formats
   value?: string
   simulate?: boolean
 }
@@ -17,6 +21,22 @@ interface ExecuteResponse {
   gasEstimate?: string
   returnData?: unknown
   error?: string
+}
+
+// Convert array args to named args for backwards compatibility
+function normalizeArgs(
+  args: Record<string, unknown> | unknown[] | undefined
+): Record<string, unknown> {
+  if (!args) return {}
+  if (Array.isArray(args)) {
+    // Convert array to object with numeric keys
+    const result: Record<string, unknown> = {}
+    args.forEach((arg, i) => {
+      result[`arg${i}`] = arg
+    })
+    return result
+  }
+  return args
 }
 
 export async function POST(
@@ -61,15 +81,15 @@ export async function POST(
     )
   }
 
-  const args = body.args || []
+  const executeParams = {
+    contractAddress: body.contractAddress,
+    functionName: body.functionName,
+    args: normalizeArgs(body.args),
+    value: body.value,
+  }
 
   if (body.simulate) {
-    const result = await simulate(agent, contract, {
-      contractAddress: body.contractAddress,
-      functionName: body.functionName,
-      args,
-      value: body.value,
-    })
+    const result = await simulate(agent, executeParams)
 
     return NextResponse.json<ApiResponse<ExecuteResponse>>({
       ok: result.success,
@@ -83,12 +103,7 @@ export async function POST(
     })
   }
 
-  const result = await execute(agent, contract, {
-    contractAddress: body.contractAddress,
-    functionName: body.functionName,
-    args,
-    value: body.value,
-  })
+  const result = await execute(agent, executeParams)
 
   return NextResponse.json<ApiResponse<ExecuteResponse>>({
     ok: result.success,

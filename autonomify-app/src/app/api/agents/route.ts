@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAgent, listAgents, type AgentConfig, type AgentType } from "@/lib/agents/telegram"
-import type { ApiResponse } from "@/lib/autonomify-core"
+import {
+  createAgent,
+  listAgents,
+  type Agent,
+  type ChannelType,
+  type ApiResponse,
+} from "@/lib/agent"
 
 interface CreateAgentBody {
   name: string
-  type?: AgentType
+  type?: ChannelType
   ownerAddress: string
   telegramBotToken?: string
 }
@@ -12,18 +17,18 @@ interface CreateAgentBody {
 interface AgentPublic {
   id: string
   name: string
-  type: AgentType
+  type: ChannelType
   walletAddress?: string
   agentIdBytes?: string
   contractCount: number
   createdAt: number
 }
 
-function toPublic(agent: AgentConfig): AgentPublic {
+function toPublic(agent: Agent): AgentPublic {
   return {
     id: agent.id,
     name: agent.name,
-    type: agent.type,
+    type: agent.channel,
     walletAddress: agent.wallet?.address,
     agentIdBytes: agent.agentIdBytes,
     contractCount: agent.contracts.length,
@@ -88,9 +93,9 @@ export async function POST(request: NextRequest) {
   try {
     const agent = await createAgent({
       name: body.name,
-      type: agentType,
+      channel: agentType,
       ownerAddress: body.ownerAddress,
-      telegramBotToken: body.telegramBotToken,
+      channelToken: body.telegramBotToken,
     })
 
     const response: AgentPublic & { privyWalletId?: string } = {

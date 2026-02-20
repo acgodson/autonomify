@@ -9,7 +9,7 @@ import { eq, and, desc } from "drizzle-orm"
 import { db, conversationMessages } from "@/lib/db"
 import type { CoreMessage } from "ai"
 
-const MAX_HISTORY_MESSAGES = 20 // Keep last N messages per conversation
+const MAX_HISTORY_MESSAGES = 20
 
 export type MessageRole = "user" | "assistant" | "system" | "tool"
 
@@ -21,9 +21,7 @@ export interface StoredMessage {
   toolResult?: unknown
 }
 
-/**
- * Get conversation history for a chat
- */
+
 export async function getConversationHistory(
   agentId: string,
   chatId: string
@@ -37,10 +35,8 @@ export async function getConversationHistory(
     limit: MAX_HISTORY_MESSAGES,
   })
 
-  // Reverse to get chronological order
   messages.reverse()
 
-  // Convert to CoreMessage format for Vercel AI SDK
   return messages.map((msg) => {
     if (msg.role === "tool" && msg.toolCallId) {
       return {
@@ -63,9 +59,7 @@ export async function getConversationHistory(
   })
 }
 
-/**
- * Add a user message to history
- */
+
 export async function addUserMessage(
   agentId: string,
   chatId: string,
@@ -79,9 +73,7 @@ export async function addUserMessage(
   })
 }
 
-/**
- * Add an assistant message to history
- */
+
 export async function addAssistantMessage(
   agentId: string,
   chatId: string,
@@ -95,9 +87,7 @@ export async function addAssistantMessage(
   })
 }
 
-/**
- * Add a tool result message to history
- */
+
 export async function addToolMessage(
   agentId: string,
   chatId: string,
@@ -116,16 +106,11 @@ export async function addToolMessage(
   })
 }
 
-/**
- * Clear old messages to prevent unbounded growth.
- * Keeps only the most recent messages per conversation.
- */
 export async function pruneOldMessages(
   agentId: string,
   chatId: string,
   keepCount: number = MAX_HISTORY_MESSAGES
 ): Promise<void> {
-  // Get IDs of messages to keep
   const toKeep = await db.query.conversationMessages.findMany({
     where: and(
       eq(conversationMessages.agentId, agentId),
@@ -140,8 +125,6 @@ export async function pruneOldMessages(
 
   if (keepIds.length === 0) return
 
-  // Delete messages not in the keep list
-  // This is a bit inefficient but works for now
   const allMessages = await db.query.conversationMessages.findMany({
     where: and(
       eq(conversationMessages.agentId, agentId),
@@ -159,9 +142,6 @@ export async function pruneOldMessages(
   }
 }
 
-/**
- * Clear entire conversation history for a chat
- */
 export async function clearConversation(
   agentId: string,
   chatId: string
