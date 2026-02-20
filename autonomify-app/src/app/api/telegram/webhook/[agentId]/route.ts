@@ -184,6 +184,13 @@ async function processWithLLM(
     { role: "user" as const, content: userMessage },
   ]
 
+  // Track tool calls to detect loops
+  const toolCallHistory: string[] = []
+  let loopDetected = false
+
+  // Create AbortController to stop generation on loop detection
+  const abortController = new AbortController()
+
   const result = await generateText({
     model: openai("gpt-4o-mini"),
     system: systemPrompt,
@@ -192,11 +199,11 @@ async function processWithLLM(
       // Use SDK-generated tool
       autonomify_execute: autonomifyTool,
 
-      // Balance check tool (specific to our Telegram implementation)
-      get_balance: tool({
-        description: "Get the native BNB balance of an address",
+      // Balance check tool - ONLY for native BNB balance
+      get_bnb_balance: tool({
+        description: "Get the native BNB balance of a wallet address. ONLY use this for checking BNB balance. Do NOT use for token balances, DEX quotes, or swap amounts - use autonomify_execute with the appropriate contract function instead (e.g., balanceOf for token balance, getAmountsOut for swap quotes).",
         parameters: z.object({
-          address: z.string().describe("The address to check balance for"),
+          address: z.string().describe("The wallet address to check BNB balance for"),
         }),
         execute: async ({ address }) => {
           const result = await getNativeBalance(bscTestnet, address)
@@ -204,7 +211,32 @@ async function processWithLLM(
         },
       }),
     },
-    maxSteps: 5,
+    maxSteps: 2, // Reduced to 2 to prevent loops
+    abortSignal: abortController.signal,
+    onStepFinish: ({ toolCalls }) => {
+      // Track tool calls and detect repetitive loops
+      if (toolCalls && toolCalls.length > 0) {
+        for (const tc of toolCalls) {
+          const callSig = `${tc.toolName}:${JSON.stringify(tc.args)}`
+          const sameCallCount = toolCallHistory.filter(h => h === callSig).length
+          toolCallHistory.push(callSig)
+
+          if (sameCallCount >= 1) {
+            // Same exact call made twice = likely a loop - abort immediately
+            console.log("Loop detected - aborting:", callSig)
+            loopDetected = true
+            abortController.abort()
+          }
+        }
+      }
+    },
+  }).catch((err) => {
+    // If aborted due to loop, return partial result
+    if (err.name === 'AbortError' || loopDetected) {
+      console.log("Generation aborted due to loop detection")
+      return { text: "", steps: [] }
+    }
+    throw err
   })
 
   // Debug logging
@@ -226,7 +258,13 @@ async function processWithLLM(
     }
   }
 
-  const responseText = result.text || "I processed your request but have no response."
+  // Handle loop detection or empty response
+  let responseText: string
+  if (loopDetected) {
+    responseText = result.text || "I ran into an issue with that request (loop detected). Please try rephrasing or check the contract arguments format."
+  } else {
+    responseText = result.text || "I processed your request but have no response."
+  }
 
   // Save assistant response to history
   await addAssistantMessage(agent.id, chatId, responseText)

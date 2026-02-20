@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Image from "next/image"
 import { FunctionList } from "@/components/function-list"
 import type { FunctionInfo } from "@/lib/autonomify-core"
+import { useWallet } from "@/lib/wallet"
 
 interface ContractAnalysis {
   summary: string
@@ -173,6 +174,9 @@ function LoadingAnimation({ word }: { word: string }) {
 }
 
 export default function Home() {
+  const { address: walletAddress, isConnected, isConnecting, connect, disconnect } = useWallet()
+  const [showConnectPrompt, setShowConnectPrompt] = useState(false)
+
   const [contract, setContract] = useState<ContractData | null>(null)
   const [agents, setAgents] = useState<AgentData[]>([])
   const [showLaunchModal, setShowLaunchModal] = useState(false)
@@ -221,15 +225,27 @@ export default function Home() {
   }, [loading])
 
   useEffect(() => {
-    fetch("/api/agents")
+    if (!isConnected || !walletAddress) {
+      setAgents([])
+      return
+    }
+
+    fetch("/api/agents", {
+      headers: { "x-owner-address": walletAddress },
+    })
       .then((res) => res.json())
       .then((json) => {
         if (json.ok) setAgents(json.data)
       })
       .catch(() => {})
-  }, [])
+  }, [isConnected, walletAddress])
 
   async function handleAutonomify() {
+    if (!isConnected) {
+      setShowConnectPrompt(true)
+      return
+    }
+
     if (!address) {
       setError("Paste a contract address")
       return
@@ -306,15 +322,34 @@ export default function Home() {
               Autonomify
             </span>
           </div>
-          {agents.length > 0 && (
-            <button
-              onClick={() => setShowAgentPanel(!showAgentPanel)}
-              className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 rounded-full px-4 py-2 transition-colors"
-            >
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
-              <span className="text-sm">{agents.length} agent{agents.length > 1 ? "s" : ""}</span>
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {isConnected && agents.length > 0 && (
+              <button
+                onClick={() => setShowAgentPanel(!showAgentPanel)}
+                className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 rounded-full px-4 py-2 transition-colors"
+              >
+                <div className="w-2 h-2 bg-green-500 rounded-full" />
+                <span className="text-sm">{agents.length} agent{agents.length > 1 ? "s" : ""}</span>
+              </button>
+            )}
+            {isConnected ? (
+              <button
+                onClick={() => disconnect()}
+                className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 rounded-full px-4 py-2 transition-colors"
+              >
+                <div className="w-2 h-2 bg-green-500 rounded-full" />
+                <span className="text-sm font-mono">{walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => connect()}
+                disabled={isConnecting}
+                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-zinc-900 font-medium rounded-full px-4 py-2 transition-colors"
+              >
+                {isConnecting ? "Connecting..." : "Connect Wallet"}
+              </button>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -579,10 +614,11 @@ export default function Home() {
         />
       )}
 
-      {showLaunchModal && contract && (
+      {showLaunchModal && contract && walletAddress && (
         <LaunchModal
           contract={contract}
           agents={agents}
+          ownerAddress={walletAddress}
           onClose={() => setShowLaunchModal(false)}
           onLaunched={(agent) => {
             setLaunchedAgent(agent)
@@ -640,6 +676,17 @@ export default function Home() {
           onClose={() => setShowSelfHostedModal(null)}
         />
       )}
+
+      {showConnectPrompt && (
+        <ConnectWalletModal
+          onConnect={() => {
+            connect()
+            setShowConnectPrompt(false)
+          }}
+          onClose={() => setShowConnectPrompt(false)}
+          isConnecting={isConnecting}
+        />
+      )}
     </main>
   )
 }
@@ -669,11 +716,13 @@ function AgentTypeBadge({ type, size = "sm" }: { type: AgentType; size?: "sm" | 
 function LaunchModal({
   contract,
   agents,
+  ownerAddress,
   onClose,
   onLaunched,
 }: {
   contract: ContractData
   agents: AgentData[]
+  ownerAddress: string
   onClose: () => void
   onLaunched: (agent: {
     id: string
@@ -748,6 +797,7 @@ function LaunchModal({
         const body: Record<string, string> = {
           name: name.trim(),
           type: agentType,
+          ownerAddress,
         }
         if (agentType === "telegram") {
           body.telegramBotToken = token.trim()
@@ -1563,6 +1613,59 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
             Done
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ConnectWalletModal({
+  onConnect,
+  onClose,
+  isConnecting,
+}: {
+  onConnect: () => void
+  onClose: () => void
+  isConnecting: boolean
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 w-full max-w-md text-center">
+        <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="6" width="20" height="12" rx="2" />
+            <path d="M22 10H2" />
+            <path d="M6 14h.01" />
+            <path d="M10 14h.01" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-semibold mb-2">Connect Your Wallet</h2>
+        <p className="text-zinc-400 text-sm mb-6">
+          Connect your wallet to create and manage your AI agents. Your wallet address will be used to authenticate your agents.
+        </p>
+
+        <button
+          onClick={onConnect}
+          disabled={isConnecting}
+          className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 text-zinc-900 font-semibold py-4 rounded-xl transition-colors mb-3"
+        >
+          {isConnecting ? (
+            "Connecting..."
+          ) : (
+            <>
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M21.805 2.195a1.5 1.5 0 0 0-1.566-.359L3.361 6.91a1.5 1.5 0 0 0-.084 2.79l7.418 3.088 3.088 7.418a1.5 1.5 0 0 0 2.79-.084l5.074-16.878a1.5 1.5 0 0 0-.842-2.049Z" />
+              </svg>
+              Connect with MetaMask
+            </>
+          )}
+        </button>
+
+        <button
+          onClick={onClose}
+          className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl transition-colors"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Inter, JetBrains_Mono, Space_Mono } from "next/font/google"
 import "./globals.css"
+import { WalletProvider } from "@/lib/wallet"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -27,7 +28,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} ${jetbrainsMono.variable} ${spaceMono.variable}`}>{children}</body>
+      <body className={`${inter.className} ${jetbrainsMono.variable} ${spaceMono.variable}`}>
+        <WalletProvider>{children}</WalletProvider>
+      </body>
     </html>
   )
 }

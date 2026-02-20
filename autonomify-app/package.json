@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.70",
+    "@metamask/sdk": "^0.34.0",
     "@neondatabase/serverless": "^1.0.2",
     "@privy-io/node": "^0.9.0",
+    "@tanstack/react-query": "^5.90.21",
     "ai": "3",
     "autonomify-sdk": "file:../packages/autonomify-sdk",
     "drizzle-orm": "^0.45.1",
@@ -23,6 +25,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "viem": "^2.21.0",
+    "wagmi": "^3.5.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

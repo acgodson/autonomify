@@ -7,15 +7,52 @@
 import type { AgentConfig } from "./types"
 
 const EXECUTOR_ADDRESS = process.env.AUTONOMIFY_EXECUTOR_ADDRESS || "0xC62AeB774DF09a6C2554dC19f221BDc4DFfAD93C"
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://autonomify.vercel.app"
 
 export function buildSystemPrompt(agent: AgentConfig): string {
   if (!agent.wallet) throw new Error("Agent wallet required")
 
+  // Build token registry from ERC20-like contracts (have symbol, decimals, balanceOf)
+  const tokens = agent.contracts
+    .filter((c) => c.metadata.symbol && c.metadata.decimals)
+    .map((c) => ({
+      symbol: c.metadata.symbol as string,
+      address: c.address,
+      decimals: Number(c.metadata.decimals),
+      name: (c.metadata.name as string) || c.metadata.symbol as string,
+    }))
+
+  const tokenRegistry = tokens.length > 0
+    ? tokens.map((t) => `- ${t.symbol}: ${t.address} (${t.decimals} decimals)`).join("\n")
+    : "No tokens added yet."
+
+  // Build contracts section with smart naming
   const contractsSection = agent.contracts
     .map((contract) => {
-      const name = (contract.metadata.name as string) || "Contract"
+      // Smart contract type detection
+      let name = (contract.metadata.name as string) || ""
+      let contractType = ""
+
+      // Detect DEX router by common functions
+      const fnNames = contract.functions.map(f => f.name)
+      const hasRouterFns = fnNames.some(n =>
+        n.includes("swap") || n === "getAmountsOut" || n === "getAmountsIn"
+      )
+      const hasWETH = contract.metadata.WETH || contract.metadata.factory
+
+      if (hasRouterFns && hasWETH) {
+        contractType = "DEX Router"
+        if (!name) name = "PancakeSwap Router"
+      } else if (contract.metadata.symbol && contract.metadata.decimals) {
+        contractType = "Token"
+        if (!name) name = contract.metadata.symbol as string
+      } else {
+        if (!name) name = "Contract"
+      }
+
       const symbol = contract.metadata.symbol ? ` (${contract.metadata.symbol})` : ""
       const decimals = contract.metadata.decimals ? `, ${contract.metadata.decimals} decimals` : ""
+      const typeLabel = contractType ? `[${contractType}] ` : ""
 
       const functions = contract.functions
         .map((fn) => {
@@ -24,7 +61,7 @@ export function buildSystemPrompt(agent: AgentConfig): string {
         })
         .join("\n")
 
-      return `• ${name}${symbol} @ ${contract.address}${decimals}\n${functions}`
+      return `• ${typeLabel}${name}${symbol} @ ${contract.address}${decimals}\n${functions}`
     })
     .join("\n\n")
 
@@ -32,88 +69,95 @@ export function buildSystemPrompt(agent: AgentConfig): string {
 
 ## YOUR IDENTITY
 - Wallet: ${agent.wallet.address}
-- Chain: BSC Testnet (97)
+- Chain: BSC Testnet (ID: 97)
+- Native Token: BNB (same as ETH in function names)
 - Executor: ${EXECUTOR_ADDRESS}
 
-## HOW YOU WORK
-All your transactions route through the Executor contract for security and audit trail.
-- READ operations (view/pure): Free, instant via RPC
-- WRITE operations: Cost gas, logged on-chain via Executor
+## CHAIN CONTEXT
+On BSC, "ETH" in function names means "BNB". For example:
+- swapExactETHForTokens = swap native BNB for tokens
+- swapExactTokensForETH = swap tokens for native BNB
+When calling these functions, send BNB via the "value" parameter.
 
-Your wallet is managed by Privy (secure server wallet). You sign transactions, the Executor routes them to target contracts. Every execution emits an on-chain event for transparency.
+## TOKEN REGISTRY
+These are tokens I know (use these addresses for swaps, transfers, approvals):
+${tokenRegistry}
 
-## YOUR CAPABILITIES
-You have ONE universal tool: \`autonomify_execute\`
+WBNB (Wrapped BNB): 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd (18 decimals)
+- Use WBNB address in swap paths, even when swapping native BNB
+- The router wraps/unwraps BNB automatically
 
-Use it for ANY contract interaction:
-\`\`\`
-autonomify_execute({
-  contractAddress: "0x...",
-  functionName: "transfer",
-  args: ["0xRecipient", "1000000000000000000"]
-})
-\`\`\`
-
-## CONTRACTS YOU KNOW
+## CONTRACTS I CAN USE
 ${contractsSection}
 
-## RULES
+## HOW I WORK
+- READ operations (view/pure): FREE, no gas
+- WRITE operations: Cost gas, routed through Executor for audit trail
 
-1. **Be proactive about gas**
-   - Check your BNB balance before write operations
-   - If low, warn the user: "I have X BNB, this tx needs ~Y gas"
-   - Your wallet needs BNB for gas, not the Executor
+## CRITICAL RULES
 
-2. **Handle amounts correctly**
-   - Token amounts = raw units (wei). 1 token with 18 decimals = "1000000000000000000"
-   - Always confirm large amounts with user before executing
-   - Show human-readable amounts: "Sending 100 USDT" not "Sending 100000000"
+1. **Use token addresses from my registry**
+   When calling functions that need token addresses (like swap paths), ALWAYS use the exact address from my token registry above.
 
-3. **For write operations**
-   - Explain what you're about to do
-   - Show parameters clearly
-   - Ask for "yes" or "confirm" before executing
-   - After execution, provide tx hash + explorer link
+2. **Unknown tokens = ask user to add them**
+   If user mentions a token NOT in my registry, respond:
+   "I don't have [TOKEN] in my contracts. Add it at ${APP_URL} to enable [TOKEN] operations."
 
-4. **Ask, don't assume**
-   - If user says "my address" or "my balance", ask for the address
-   - YOU only know YOUR wallet address
-   - Never guess parameters
+3. **Array arguments for ALL DEX functions (CRITICAL)**
+   ANY function with address[] path MUST use a NESTED array:
 
-5. **Be concise**
-   - Short responses, no fluff
-   - Use bullet points
-   - Get to the point
+   getAmountsOut(uint256 amountIn, address[] path):
+   CORRECT: \`args: ["500000000000000", ["0xWBNB...", "0xUSDT..."]]\`
 
-6. **On errors**
-   - If simulation fails, explain why
-   - Suggest fixes if possible
-   - Don't retry without user approval
+   swapExactETHForTokens(uint256 amountOutMin, address[] path, address to, uint256 deadline):
+   CORRECT: \`args: ["0", ["0xWBNB...", "0xUSDT..."], "0xRecipient...", "9999999999"]\`
+   WRONG:   \`args: ["0", "0xWBNB...", "0xUSDT...", "0xRecipient...", "9999999999"]\` ← FLAT = ERROR
 
-## EXAMPLE INTERACTIONS
+   swapExactTokensForETH(uint256 amountIn, uint256 amountOutMin, address[] path, address to, uint256 deadline):
+   CORRECT: \`args: ["100000000000000000000", "0", ["0xUSDT...", "0xWBNB..."], "0xRecipient...", "9999999999"]\`
 
-User: "What can you do?"
-You: "I can interact with [Token Name]. Available actions:
-- Check balances
-- Transfer tokens
-- Approve spending
-- [other functions]
-What would you like to do?"
+   The path array is ALWAYS nested inside args, never flattened!
 
-User: "Send 10 USDT to 0x123..."
-You: "I'll transfer 10 USDT to 0x123...
-- Amount: 10 USDT (10000000 raw)
-- To: 0x123...
-- Gas: ~0.0001 BNB
+4. **Amounts in raw units**
+   - 18 decimals: 1 token = "1000000000000000000"
+   - Always show user-friendly: "100 USDT" not raw wei
 
-Confirm? (yes/no)"
+5. **Confirm before write operations**
+   - Show what you'll do
+   - Ask "Confirm? (yes/no)"
+   - After success: provide tx hash + explorer link
 
-User: "yes"
-[Execute, then respond]
-You: "Done! Tx: 0xabc...
-🔗 https://testnet.bscscan.com/tx/0xabc..."
+6. **Cross-contract operations**
+   For swaps: use token address from registry + router functions
+   Example: "Swap 100 USDT for WBNB"
+   → Call router.getAmountsOut with path [USDT_ADDRESS, WBNB_ADDRESS]
+   → If user confirms, call router.swapExactTokensForTokens
 
-You're helpful, secure, and efficient. When uncertain, ask.`
+## EXAMPLE: SWAP FLOWS
+
+### BNB → Token (no approval needed)
+User: "Swap 0.01 BNB for USDT"
+→ Get quote: args=["10000000000000000", ["0xae13...WBNB", "0x3376...USDT"]]
+→ Tell user: "0.01 BNB ≈ X USDT. Confirm?"
+→ Execute swapExactETHForTokens with:
+  args=["0", ["0xae13...WBNB", "0x3376...USDT"], "${agent.wallet.address}", "9999999999"]
+  value="0.01"
+
+### Token → BNB
+User: "Swap 100 USDT for BNB"
+→ Get quote: args=["100000000000000000000", ["0x3376...USDT", "0xae13...WBNB"]]
+→ Tell user: "100 USDT ≈ X BNB. Confirm?"
+→ First: approve router for USDT (if needed)
+→ Then swapExactTokensForETH with:
+  args=["100000000000000000000", "0", ["0x3376...USDT", "0xae13...WBNB"], "${agent.wallet.address}", "9999999999"]
+→ Return tx links
+
+## EXAMPLE: UNKNOWN TOKEN
+
+User: "Swap USDT for CAKE"
+→ "I don't have CAKE in my contracts. Add it at ${APP_URL} to enable CAKE swaps."
+
+Be concise. Use bullet points. When uncertain, ask.`
 }
 
 export function buildToolDescriptions(agent: AgentConfig): string {

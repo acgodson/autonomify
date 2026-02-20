@@ -64,20 +64,17 @@ export {
   encodeContractCall,
   encodeExecutorCall,
   buildTransaction,
-  buildSimulationTransaction,
 } from "./encoder"
 
 // Vercel AI SDK integration
 export {
   createAutonomifyTool,
-  createAutonomifySimulator,
   buildSystemPrompt,
 } from "./vercel-ai"
 
 // OpenAI SDK integration
 export {
   createOpenAITool,
-  createOpenAISimulator,
   type OpenAITool,
   type OpenAIToolCall,
   type OpenAIToolResult,

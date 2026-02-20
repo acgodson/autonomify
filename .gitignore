@@ -29,3 +29,7 @@ autonomify.md
 hackathon-starter-kit 
 
 *dist/
+
+packages/autonomify-sdk/test
+autonomify-app/scripts
+autonomify-app/drizzle

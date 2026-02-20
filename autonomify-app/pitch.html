@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autonomify - Smart Contracts Meet AI Agents</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a0f;
+            color: #ffffff;
+            overflow: hidden;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 180, 50, 0.05) 0%, transparent 50%);
+            animation: rotate 30s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .slide-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .slide {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 80px;
+        }
+
+        .slide.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .grid-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(255, 180, 50, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 180, 50, 0.04) 1px, transparent 1px);
+            background-size: 60px 60px;
+            opacity: 0.5;
+        }
+
+        .gradient-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(255, 180, 50, 0.03) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .slide-content {
+            width: 100%;
+            max-width: 1400px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Typography - Autonomify Gold Theme */
+        .massive-text {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(80px, 9vw, 160px);
+            font-weight: 800;
+            line-height: 0.95;
+            letter-spacing: -0.04em;
+            color: #ffffff;
+            margin-bottom: 40px;
+            text-shadow:
+                0 0 40px rgba(255, 180, 50, 0.25),
+                0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .big-text {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: clamp(52px, 5.5vw, 100px);
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+            color: #ffffff;
+            text-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
+        }
+
+        .medium-text {
+            font-size: clamp(30px, 3.2vw, 52px);
+            font-weight: 500;
+            line-height: 1.3;
+            color: #c8c8d8;
+            margin-top: 40px;
+        }
+
+        .body-text {
+            font-size: clamp(26px, 2.8vw, 42px);
+            line-height: 1.5;
+            color: #d8d8e8;
+            font-weight: 400;
+        }
+
+        .small-text {
+            font-size: clamp(20px, 2vw, 32px);
+            line-height: 1.6;
+            color: #a0a0b0;
+        }
+
+        /* Autonomify Gold Highlight */
+        .highlight {
+            color: #FFB432;
+            position: relative;
+            font-weight: 700;
+        }
+
+        .highlight::after {
+            content: '';
+            position: absolute;
+            bottom: 0.05em;
+            left: -0.05em;
+            right: -0.05em;
+            height: 0.18em;
+            background: rgba(255, 180, 50, 0.25);
+            border-radius: 2px;
+        }
+
+        .highlight-red {
+            color: #ff6b6b;
+            position: relative;
+            font-weight: 700;
+        }
+
+        .highlight-red::after {
+            content: '';
+            position: absolute;
+            bottom: 0.05em;
+            left: -0.05em;
+            right: -0.05em;
+            height: 0.18em;
+            background: rgba(255, 107, 107, 0.25);
+            border-radius: 2px;
+        }
+
+        .highlight-green {
+            color: #33ff99;
+            position: relative;
+            font-weight: 700;
+        }
+
+        .highlight-green::after {
+            content: '';
+            position: absolute;
+            bottom: 0.05em;
+            left: -0.05em;
+            right: -0.05em;
+            height: 0.18em;
+            background: rgba(0, 255, 136, 0.25);
+            border-radius: 2px;
+        }
+
+        .emphasis {
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        /* Click layers */
+        .click-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 80px;
+        }
+
+        .click-layer.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .center-stage {
+            text-align: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .split {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 100px;
+            align-items: center;
+        }
+
+        /* Mascot styling */
+        .mascot {
+            width: 200px;
+            height: auto;
+            filter: drop-shadow(0 0 30px rgba(255, 180, 50, 0.4));
+            animation: float-mascot 3s ease-in-out infinite;
+        }
+
+        .mascot-large {
+            width: 300px;
+        }
+
+        .mascot-small {
+            width: 120px;
+        }
+
+        @keyframes float-mascot {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+
+        /* Barrier cards */
+        .barrier-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            margin-top: 60px;
+        }
+
+        .barrier-card {
+            text-align: center;
+            padding: 40px 30px;
+            background: rgba(255, 107, 107, 0.08);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            transition: all 0.4s ease;
+        }
+
+        .barrier-card:hover {
+            background: rgba(255, 107, 107, 0.15);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 60px rgba(255, 107, 107, 0.2);
+        }
+
+        .barrier-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .barrier-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: #ff6b6b;
+            margin-bottom: 12px;
+        }
+
+        .barrier-stat {
+            font-size: 18px;
+            color: #a0a0b0;
+        }
+
+        /* Agent framework logos */
+        .agent-logo-item {
+            text-align: center;
+            padding: 20px 28px;
+            background: rgba(20, 30, 40, 0.6);
+            border: 1px solid rgba(255, 180, 50, 0.15);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            opacity: 0.45;
+            z-index: 2;
+        }
+
+        .agent-logo-item.animate-in {
+            opacity: 0;
+            animation: agentLogoIn 0.5s ease forwards;
+        }
+
+        .agent-logo-item:hover {
+            transform: scale(1.08) !important;
+            box-shadow: 0 12px 48px rgba(255, 180, 50, 0.35);
+            border-color: rgba(255, 180, 50, 0.7);
+        }
+
+        .agent-logo-label {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            color: #a0a0b0;
+            margin-top: 10px;
+        }
+
+        @keyframes agentLogoIn {
+            from {
+                opacity: 0;
+                transform: scale(0.7) translateY(10px);
+            }
+            to {
+                opacity: 0.45;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .agent-logo-item.spiral-out {
+            animation: spiralVortex 0.8s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+        }
+
+        .agent-logo-item.spiral-out:nth-child(2) { animation-delay: 0.05s; }
+        .agent-logo-item.spiral-out:nth-child(3) { animation-delay: 0.1s; }
+        .agent-logo-item.spiral-out:nth-child(4) { animation-delay: 0.15s; }
+        .agent-logo-item.spiral-out:nth-child(5) { animation-delay: 0.2s; }
+
+        @keyframes spiralVortex {
+            0% { opacity: 1; transform: scale(1) rotate(0deg); }
+            100% { opacity: 0; transform: scale(0) rotate(360deg); }
+        }
+
+        /* Year badge */
+        .year-badge {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 30px;
+            font-weight: 800;
+            color: #FFB432;
+            padding: 16px 40px;
+            border: 2px solid rgba(255, 180, 50, 0.6);
+            border-radius: 40px;
+            background: rgba(255, 180, 50, 0.08);
+        }
+
+        /* Problem cards - simplified */
+        .problem-item {
+            font-size: clamp(30px, 3vw, 44px);
+            font-weight: 500;
+            color: #f0f0f0;
+            padding: 22px 36px;
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 5px solid rgba(255, 107, 107, 0.6);
+            border-radius: 6px;
+            animation: slideInRight 0.5s ease forwards;
+        }
+
+        .solution-item {
+            font-size: clamp(30px, 3vw, 44px);
+            font-weight: 500;
+            color: #f0f0f0;
+            padding: 22px 36px;
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 5px solid rgba(255, 180, 50, 0.6);
+            border-radius: 6px;
+            animation: slideInRight 0.5s ease forwards;
+        }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Flow diagram */
+        .flow-v2 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 0 auto;
+            max-width: 1200px;
+            position: relative;
+            padding: 0 40px;
+        }
+
+        .flow-line-v2 {
+            position: absolute;
+            top: 60px;
+            left: 15%;
+            right: 15%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            z-index: 1;
+            border-radius: 2px;
+        }
+
+        .flow-item-v2 {
+            text-align: center;
+            flex: 1;
+            position: relative;
+            z-index: 2;
+            opacity: 0.3;
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .flow-item-v2.active {
+            opacity: 1 !important;
+            transform: scale(1.05) !important;
+        }
+
+        .flow-icon-v2 {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0a0a0f;
+            border: 3px solid rgba(255, 255, 255, 0.25);
+            border-radius: 50%;
+            color: #ffffff;
+            font-size: 40px;
+            transition: all 0.6s ease;
+        }
+
+        .flow-item-v2.active .flow-icon-v2 {
+            border-color: #FFB432 !important;
+            background: #1a1510 !important;
+            box-shadow: 0 0 40px rgba(255, 180, 50, 0.4) !important;
+        }
+
+        .flow-title-v2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 8px;
+        }
+
+        .flow-subtitle-v2 {
+            font-size: 16px;
+            color: #a0a0b8;
+            font-weight: 500;
+        }
+
+        /* Stats */
+        .stat-highlight {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 120px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #FFB432 0%, #ffffff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Feature grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 40px;
+            margin-top: 60px;
+        }
+
+        .feature-card {
+            padding: 40px;
+            background: rgba(255, 180, 50, 0.05);
+            border: 1px solid rgba(255, 180, 50, 0.2);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            background: rgba(255, 180, 50, 0.1);
+            border-color: rgba(255, 180, 50, 0.5);
+            transform: translateY(-5px);
+        }
+
+        .feature-icon {
+            font-size: 36px;
+            margin-bottom: 16px;
+        }
+
+        .feature-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: #FFB432;
+            margin-bottom: 8px;
+        }
+
+        .feature-desc {
+            font-size: 18px;
+            color: #a0a0b0;
+        }
+
+        /* Navigation */
+        .slide-number {
+            position: fixed;
+            bottom: 60px;
+            left: 80px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 14px;
+            color: #707080;
+            letter-spacing: 0.15em;
+            z-index: 100;
+        }
+
+        .nav-hint {
+            position: fixed;
+            bottom: 60px;
+            right: 80px;
+            font-size: 14px;
+            color: #707080;
+            font-family: 'Space Grotesk', sans-serif;
+            letter-spacing: 0.08em;
+            z-index: 100;
+        }
+
+        .progress-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #FFB432 0%, #ff8c00 100%);
+            transition: width 0.4s ease;
+            z-index: 100;
+        }
+
+        /* Fullscreen button */
+        .fullscreen-btn {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            width: 48px;
+            height: 48px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            color: #808090;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .fullscreen-btn:hover {
+            background: rgba(255, 180, 50, 0.1);
+            border-color: rgba(255, 180, 50, 0.4);
+            color: #FFB432;
+        }
+
+        .glow-text {
+            text-shadow:
+                0 0 30px rgba(255, 180, 50, 0.3),
+                0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Code block styling */
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 180, 50, 0.2);
+            border-radius: 12px;
+            padding: 30px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 18px;
+            color: #e0e0e0;
+            text-align: left;
+            overflow: hidden;
+        }
+
+        .code-comment { color: #6a9955; }
+        .code-string { color: #ce9178; }
+        .code-keyword { color: #569cd6; }
+        .code-function { color: #dcdcaa; }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .slide { padding: 60px 40px; }
+            .split { grid-template-columns: 1fr; gap: 60px; }
+            .barrier-grid { grid-template-columns: 1fr; gap: 30px; }
+            .feature-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="slide-container" id="slideContainer">
+
+        <!-- Slide 0: Title -->
+        <div class="slide active" data-clicks="0">
+            <div class="grid-bg"></div>
+            <div class="gradient-overlay"></div>
+            <div class="slide-content center-stage">
+                <img src="public/autonomify_mascot.png" class="mascot mascot-large" style="margin-bottom: 40px;">
+                <div class="massive-text glow-text">Autonomify</div>
+                <div class="medium-text" style="margin-top: 20px;">
+                    Turn Any Smart Contract Into an AI Agent<br>
+                    <span class="highlight">in 60 Seconds</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 1: The UX Crisis -->
+        <div class="slide" data-clicks="1">
+            <div class="grid-bg"></div>
+            <div class="gradient-overlay"></div>
+            <div class="slide-content center-stage">
+                <div class="click-layer visible">
+                    <div>
+                        <div class="big-text">
+                            Smart contracts are<br>
+                            <span class="highlight-red">unusable</span><br>
+                            for 99% of people.
+                        </div>
+                    </div>
+                </div>
+                <div class="click-layer">
+                    <div>
+                        <div class="big-text" style="margin-bottom: 40px;">
+                            Smart contracts are<br>
+                            <span class="highlight-red">unusable</span><br>
+                            for 99% of people.
+                        </div>
+                        <div class="barrier-grid">
+                            <div class="barrier-card">
+                                <div class="barrier-icon">2-3%</div>
+                                <div class="barrier-title">UX Investment</div>
+                                <div class="barrier-stat">of blockchain budgets</div>
+                            </div>
+                            <div class="barrier-card">
+                                <div class="barrier-icon">30%</div>
+                                <div class="barrier-title">Lack Knowledge</div>
+                                <div class="barrier-stat">top barrier to DeFi</div>
+                            </div>
+                            <div class="barrier-card">
+                                <div class="barrier-icon">22.7%</div>
+                                <div class="barrier-title">Security Fear</div>
+                                <div class="barrier-stat">second barrier</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: AI Agents Rising -->
+        <div class="slide" data-clicks="2">
+            <div class="grid-bg"></div>
+            <div class="slide-content">
+                <div class="click-layer visible">
+                    <div style="position: relative; width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center;">
+                        <div class="year-badge" style="position: absolute; top: 8%; left: 50%; transform: translateX(-50%);">2025=6</div>
+                        <div class="big-text" style="font-weight: 800; text-align: center;">
+                            AI Agents<br>
+                            to the Rescue?
+                        </div>
+                    </div>
+                </div>
+
+                <div class="click-layer">
+                    <div style="position: relative; width: 100%; height: 100vh;">
+                        <div class="year-badge" style="position: absolute; top: 8%; left: 50%; transform: translateX(-50%);">2026</div>
+                        <div class="big-text" style="font-weight: 800; text-align: center; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10;">
+                            AI Agents<br>
+                            to the Rescue?
+                        </div>
+
+                        <div class="agent-logo-item animate-in" style="position: absolute; top: 18%; left: 12%; animation-delay: 0s;">
+                            <div style="font-size: 28px; font-weight: 800; color: #FFB432;">ai16z</div>
+                            <div class="agent-logo-label">ElizaOS</div>
+                        </div>
+
+                        <div class="agent-logo-item animate-in" style="position: absolute; top: 15%; right: 14%; animation-delay: 0.15s;">
+                            <div style="font-size: 28px; font-weight: 800; color: #10a37f;">GPT</div>
+                            <div class="agent-logo-label">OpenAI Agents</div>
+                        </div>
+
+                        <div class="agent-logo-item animate-in" style="position: absolute; bottom: 25%; left: 10%; animation-delay: 0.3s;">
+                            <div style="font-size: 28px; font-weight: 800; color: #cc785c;">Claude</div>
+                            <div class="agent-logo-label">MCP Protocol</div>
+                        </div>
+
+                        <div class="agent-logo-item animate-in" style="position: absolute; bottom: 22%; right: 10%; animation-delay: 0.45s;">
+                            <div style="font-size: 28px; font-weight: 800; color: #00d4aa;">GOAT</div>
+                            <div class="agent-logo-label">Ohmni</div>
+                        </div>
+
+                        <div class="agent-logo-item animate-in" style="position: absolute; top: 48%; right: 5%; transform: translateY(-50%); animation-delay: 0.6s;">
+                            <div style="font-size: 28px; font-weight: 800; color: #8b5cf6;">Rig</div>
+                            <div class="agent-logo-label">Rust Framework</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="click-layer">
+                    <div style="position: relative; width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; gap: 100px;">
+                        <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                            <div class="year-badge" style="margin-bottom: 24px;">2026</div>
+                            <div class="big-text" style="font-weight: 800;">
+                                AI Agents<br>
+                                to the Rescue?
+                            </div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 24px; min-width: 450px;">
+                            <div class="problem-item">Trusted infrastructure</div>
+                            <div class="problem-item">Secure signers</div>
+                            <div class="problem-item">Context lives in agent</div>
+                            <div class="problem-item">Complex setup</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: The Real Barriers -->
+        <div class="slide" data-clicks="0">
+            <div class="grid-bg"></div>
+            <div class="slide-content center-stage">
+                <div class="big-text">
+                    Building an agent that<br>
+                    <span class="emphasis">actually transacts</span><br>
+                    is still hard.
+                </div>
+                <div class="medium-text" style="margin-top: 60px; color: #a0a0b0;">
+                    ABIs, encodings, wallet management,<br>
+                    chain configs, gas estimation...
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Introducing Autonomify -->
+        <div class="slide" data-clicks="0">
+            <div class="grid-bg"></div>
+            <div class="gradient-overlay"></div>
+            <div class="slide-content center-stage">
+                <img src="public/autonomify_mascot.png" class="mascot" style="margin-bottom: 30px;">
+                <div class="medium-text" style="color: #FFB432; margin-top: 0;">
+                    What if you could just
+                </div>
+                <div class="massive-text glow-text" style="margin-top: 20px;">
+                    Paste an Address
+                </div>
+                <div class="medium-text">
+                    and get an AI agent that<br>
+                    <span class="highlight">speaks human</span>?
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5: How It Works - Flow -->
+        <div class="slide" data-clicks="4">
+            <div class="grid-bg"></div>
+            <div class="slide-content">
+                <div class="big-text center-stage" style="margin-bottom: 80px;">How Autonomify Works</div>
+                <div class="flow-v2">
+                    <div class="flow-line-v2" id="flowLine"></div>
+
+                    <div class="flow-item-v2 active" data-step="1">
+                        <div class="flow-icon-v2">📋</div>
+                        <div class="flow-title-v2">Paste Address</div>
+                        <div class="flow-subtitle-v2">Any verified contract</div>
+                    </div>
+
+                    <div class="flow-item-v2" data-step="2">
+                        <div class="flow-icon-v2">🔍</div>
+                        <div class="flow-title-v2">Auto-Resolve</div>
+                        <div class="flow-subtitle-v2">ABI + Metadata</div>
+                    </div>
+
+                    <div class="flow-item-v2" data-step="3">
+                        <div class="flow-icon-v2">🤖</div>
+                        <div class="flow-title-v2">Generate Tool</div>
+                        <div class="flow-subtitle-v2">Universal AI tool</div>
+                    </div>
+
+                    <div class="flow-item-v2" data-step="4">
+                        <div class="flow-icon-v2">💬</div>
+                        <div class="flow-title-v2">Launch Bot</div>
+                        <div class="flow-subtitle-v2">Telegram ready</div>
+                    </div>
+
+                    <div class="flow-item-v2" data-step="5">
+                        <div class="flow-icon-v2">⛓️</div>
+                        <div class="flow-title-v2">Execute</div>
+                        <div class="flow-subtitle-v2">On-chain via Executor</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: The Magic -->
+        <div class="slide" data-clicks="0">
+            <div class="grid-bg"></div>
+            <div class="slide-content center-stage">
+                <div class="medium-text" style="color: #a0a0b0; margin-top: 0;">The key insight:</div>
+                <div class="big-text" style="margin-top: 30px;">
+                    One Tool.<br>
+                    <span class="highlight">Any Contract.</span><br>
+                    Any Function.
+                </div>
+                <div class="code-block" style="margin-top: 60px; max-width: 700px; margin-left: auto; margin-right: auto;">
+                    <span class="code-comment">// User says:</span><br>
+                    <span class="code-string">"Swap 0.001 BNB for USDT"</span><br><br>
+                    <span class="code-comment">// LLM calls:</span><br>
+                    <span class="code-function">autonomify_execute</span>({<br>
+                    &nbsp;&nbsp;contract: <span class="code-string">"PancakeRouter"</span>,<br>
+                    &nbsp;&nbsp;function: <span class="code-string">"swapExactETHForTokens"</span>,<br>
+                    &nbsp;&nbsp;value: <span class="code-string">"0.001"</span><br>
+                    })
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7: Key Features -->
+        <div class="slide" data-clicks="0">
+            <div class="grid-bg"></div>
+            <div class="slide-content center-stage">
+                <div class="big-text" style="margin-bottom: 20px;">Key Features</div>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <div class="feature-title">60 Second Setup</div>
+                        <div class="feature-desc">Paste address, launch bot. Done.</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔗</div>
+                        <div class="feature-title">Multi-Contract</div>
+                        <div class="feature-desc">USDT + PancakeSwap in one agent</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">💰</div>
+                        <div class="feature-title">FREE Reads</div>
+                        <div class="feature-desc">View functions cost zero gas</div>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📜</div>
+                        <div class="feature-title">Audit Trail</div>
+                        <div class="feature-desc">All writes via Executor contract</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Verified Transaction -->
+        <div class="slide" data-clicks="0">
+            <div class="grid-bg"></div>
+            <div class="gradient-overlay"></div>
+            <div class="slide-content center-stage">
+                <div class="medium-text" style="color: #33ff99; margin-top: 0;">Verified on BSC Testnet</div>
+                <div class="stat-highlight" style="margin-top: 20px;">0.001 BNB</div>
+                <div class="big-text" style="margin-top: 20px;">
+                    → <span class="highlight">10.33 USDT</span>
+                </div>
+                <div class="small-text" style="margin-top: 40px; color: #707080;">
+                    Tx: 0xcb35f529...95923a84
+                </div>
+                <div class="medium-text" style="margin-top: 60px;">
+                    User said <span class="emphasis">"swap"</span><br>
+                    Agent did the rest.
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Demo Time -->
+        <div class="slide" data-clicks="0">
+            <div class="grid-bg"></div>
+            <div class="gradient-overlay"></div>
+            <div class="slide-content center-stage">
+                <img src="public/autonomify_mascot.png" class="mascot" style="margin-bottom: 30px;">
+                <div class="massive-text glow-text">Demo Time</div>
+                <div class="medium-text" style="margin-top: 30px;">
+                    Let's autonomify a contract<br>
+                    <span class="highlight">live</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 10: Thank You -->
+        <div class="slide" data-clicks="0">
+            <div class="grid-bg"></div>
+            <div class="gradient-overlay"></div>
+            <div class="slide-content center-stage">
+                <img src="public/autonomify_mascot.png" class="mascot mascot-small" style="margin-bottom: 30px;">
+                <div class="massive-text glow-text" style="margin-bottom: 40px;">Thank You</div>
+                <div class="body-text" style="line-height: 2.2; color: #a0a0b0;">
+                    <span class="highlight">autonomify.vercel.app</span><br>
+                    <span style="color: #707080;">Good Vibes Only: OpenClaw Edition | BNBChain 2026</span>
+                </div>
+                <div class="small-text" style="margin-top: 60px; color: #707080;">
+                    Solo build by @acgodson
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="slide-number" id="slideNumber">01 / 10</div>
+    <div class="nav-hint">SPACE or → to continue</div>
+    <div class="progress-bar" id="progressBar"></div>
+
+    <button class="fullscreen-btn" id="fullscreenBtn" title="Toggle fullscreen (F)">
+        <svg id="fsExpand" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+        </svg>
+        <svg id="fsCompress" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+            <path d="M4 14h6v6m10-10h-6V4m0 6l7-7M3 21l7-7" />
+        </svg>
+    </button>
+
+    <script>
+        let currentSlide = 0;
+        let currentClick = 0;
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+
+        function updateProgress() {
+            const progress = ((currentSlide + 1) / totalSlides) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+            document.getElementById('slideNumber').textContent =
+                String(currentSlide + 1).padStart(2, '0') + ' / ' + totalSlides;
+        }
+
+        function showSlide(index) {
+            if (index < 0 || index >= totalSlides) return;
+            slides[currentSlide].classList.remove('active');
+            currentSlide = index;
+            currentClick = 0;
+            slides[currentSlide].classList.add('active');
+            const layers = slides[currentSlide].querySelectorAll('.click-layer');
+            layers.forEach((layer, i) => {
+                layer.classList.toggle('visible', i === 0);
+            });
+
+            // Initialize flow animation for slide 5
+            if (currentSlide === 5) {
+                setTimeout(() => {
+                    const flowLine = document.getElementById('flowLine');
+                    if (flowLine) {
+                        flowLine.style.background = 'rgba(255, 255, 255, 0.1)';
+                    }
+                }, 100);
+            }
+
+            updateProgress();
+        }
+
+        let isTransitioning = false;
+
+        function nextAction() {
+            if (isTransitioning) return;
+
+            const currentSlideEl = slides[currentSlide];
+            const maxClicks = parseInt(currentSlideEl.dataset.clicks) || 0;
+
+            if (currentClick < maxClicks) {
+                currentClick++;
+
+                if (currentSlide === 5) {
+                    updateFlowAnimation(currentClick);
+                } else if (currentSlide === 2 && currentClick === 2) {
+                    spiralOutLogos();
+                } else {
+                    const layers = currentSlideEl.querySelectorAll('.click-layer');
+                    if (layers.length > 0) {
+                        layers.forEach((layer, i) => {
+                            layer.classList.toggle('visible', i === currentClick);
+                        });
+                    }
+                }
+            } else {
+                if (currentSlide < totalSlides - 1) {
+                    showSlide(currentSlide + 1);
+                }
+            }
+        }
+
+        function spiralOutLogos() {
+            isTransitioning = true;
+            const currentSlideEl = slides[currentSlide];
+            const layers = currentSlideEl.querySelectorAll('.click-layer');
+            const logoLayer = layers[1];
+            const nextLayer = layers[2];
+
+            const logos = logoLayer.querySelectorAll('.agent-logo-item');
+            logos.forEach(logo => {
+                logo.classList.remove('animate-in');
+                logo.classList.add('spiral-out');
+            });
+
+            setTimeout(() => {
+                logoLayer.classList.remove('visible');
+                nextLayer.classList.add('visible');
+                isTransitioning = false;
+            }, 900);
+        }
+
+        function updateFlowAnimation(step) {
+            const flowLine = document.getElementById('flowLine');
+            const flowItems = document.querySelectorAll('.flow-item-v2');
+
+            if (flowLine && flowItems.length > 0) {
+                const activeCount = step + 1;
+                const percentage = (activeCount / flowItems.length) * 100;
+
+                flowLine.style.background = `linear-gradient(90deg,
+                    #FFB432 0%,
+                    #ff8c00 ${percentage}%,
+                    rgba(255, 255, 255, 0.15) ${percentage}%)`;
+
+                flowItems.forEach((item, index) => {
+                    if (index < activeCount) {
+                        item.classList.add('active');
+                    } else {
+                        item.classList.remove('active');
+                    }
+                });
+            }
+        }
+
+        function previousAction() {
+            if (isTransitioning) return;
+
+            if (currentClick > 0) {
+                currentClick--;
+
+                if (currentSlide === 5) {
+                    updateFlowAnimation(currentClick);
+                } else {
+                    if (currentSlide === 2 && currentClick === 1) {
+                        const logoLayer = slides[currentSlide].querySelectorAll('.click-layer')[1];
+                        logoLayer.querySelectorAll('.agent-logo-item').forEach(logo => {
+                            logo.classList.remove('spiral-out', 'animate-in');
+                            logo.style.opacity = '0.45';
+                            logo.style.transform = '';
+                        });
+                    }
+                    const layers = slides[currentSlide].querySelectorAll('.click-layer');
+                    if (layers.length > 0) {
+                        layers.forEach((layer, i) => {
+                            layer.classList.toggle('visible', i === currentClick);
+                        });
+                    }
+                }
+            } else if (currentSlide > 0) {
+                showSlide(currentSlide - 1);
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function updateFullscreenIcon() {
+            const isFs = !!document.fullscreenElement;
+            document.getElementById('fsExpand').style.display = isFs ? 'none' : 'block';
+            document.getElementById('fsCompress').style.display = isFs ? 'block' : 'none';
+        }
+
+        document.getElementById('fullscreenBtn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleFullscreen();
+        });
+
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'f' || e.key === 'F') {
+                toggleFullscreen();
+            } else if (e.key === 'ArrowRight' || e.key === ' ') {
+                e.preventDefault();
+                nextAction();
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                previousAction();
+            }
+        });
+
+        document.getElementById('slideContainer').addEventListener('click', (e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            if (x > rect.width / 2) {
+                nextAction();
+            } else {
+                previousAction();
+            }
+        });
+
+        updateProgress();
+
+        slides.forEach(slide => {
+            if (!slide.querySelector('.gradient-overlay')) {
+                const overlay = document.createElement('div');
+                overlay.className = 'gradient-overlay';
+                slide.insertBefore(overlay, slide.firstChild.nextSibling);
+            }
+        });
+    </script>
+</body>
+
+</html>

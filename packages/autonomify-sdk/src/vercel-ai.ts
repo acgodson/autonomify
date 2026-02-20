@@ -30,8 +30,8 @@
 
 import { tool } from "ai"
 import { z } from "zod"
-import { createPublicClient, http } from "viem"
-import { buildTransaction, buildSimulationTransaction } from "./encoder"
+import { createPublicClient, http, decodeFunctionResult, type AbiFunction } from "viem"
+import { buildTransaction, encodeContractCall } from "./encoder"
 import type {
   AutonomifyToolConfig,
   ExecuteParams,
@@ -40,10 +40,63 @@ import type {
 } from "./types"
 
 /**
+ * Convert BigInts to strings recursively for JSON serialization
+ */
+function serializeBigInts(obj: unknown): unknown {
+  if (typeof obj === "bigint") {
+    return obj.toString()
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(serializeBigInts)
+  }
+  if (obj !== null && typeof obj === "object") {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = serializeBigInts(value)
+    }
+    return result
+  }
+  return obj
+}
+
+/**
+ * Find function ABI by name
+ */
+function findFunction(
+  exportData: AutonomifyExport,
+  contractAddress: `0x${string}`,
+  functionName: string
+): AbiFunction | undefined {
+  const contract = exportData.contracts[contractAddress]
+  if (!contract) return undefined
+
+  return contract.abi.find(
+    (item): item is AbiFunction =>
+      item.type === "function" && item.name === functionName
+  )
+}
+
+/**
+ * Check if function is read-only (view/pure)
+ */
+function isReadOnly(fn: AbiFunction): boolean {
+  return fn.stateMutability === "view" || fn.stateMutability === "pure"
+}
+
+/**
  * Create the universal Autonomify tool for Vercel AI SDK
+ *
+ * Automatically routes:
+ * - view/pure functions → free eth_call (no gas)
+ * - nonpayable/payable functions → executor contract (requires gas)
  */
 export function createAutonomifyTool(config: AutonomifyToolConfig) {
   const { export: exportData, agentId, signAndSend } = config
+
+  // Create public client for free read calls
+  const publicClient = createPublicClient({
+    transport: http(exportData.chain.rpc),
+  })
 
   // Build description with available contracts
   const contractList = Object.entries(exportData.contracts)
@@ -60,8 +113,13 @@ export function createAutonomifyTool(config: AutonomifyToolConfig) {
         .string()
         .describe("The function name to call"),
       args: z
-        .array(z.any())
-        .describe("Function arguments in order"),
+        .array(z.union([
+          z.string(),
+          z.number(),
+          z.boolean(),
+          z.array(z.string())  // Support array arguments like address[] for getAmountsOut path
+        ]))
+        .describe("Function arguments in order. For functions with array parameters (like getAmountsOut's address[] path), pass the array as a NESTED array element. Example for getAmountsOut(uint256 amountIn, address[] path): args=[\"1000000\", [\"0xWBNB...\", \"0xUSDT...\"]] - note the path is a nested array, NOT separate elements."),
       value: z
         .string()
         .optional()
@@ -69,17 +127,67 @@ export function createAutonomifyTool(config: AutonomifyToolConfig) {
     }),
     execute: async (params): Promise<ExecuteResult> => {
       try {
+        // Normalize address to checksum format for lookup
+        const inputAddress = params.contractAddress.toLowerCase()
+        const contractEntry = Object.entries(exportData.contracts).find(
+          ([addr]) => addr.toLowerCase() === inputAddress
+        )
+
+        if (!contractEntry) {
+          return {
+            success: false,
+            error: `Contract ${params.contractAddress} not found in export`,
+          }
+        }
+
+        const [contractAddress, contract] = contractEntry as [`0x${string}`, typeof exportData.contracts[`0x${string}`]]
+
+        // Find the function in the ABI
+        const fn = findFunction(exportData, contractAddress, params.functionName)
+
+        if (!fn) {
+          return {
+            success: false,
+            error: `Function ${params.functionName} not found in contract`,
+          }
+        }
+
+        // For view/pure functions, use free eth_call (no gas needed)
+        if (isReadOnly(fn)) {
+          const calldata = encodeContractCall(contract.abi, params.functionName, params.args)
+
+          const result = await publicClient.call({
+            to: contractAddress,
+            data: calldata,
+          })
+
+          // Decode the result
+          let decodedResult: unknown
+          try {
+            decodedResult = decodeFunctionResult({
+              abi: contract.abi,
+              functionName: params.functionName,
+              data: result.data!,
+            })
+          } catch {
+            decodedResult = result.data
+          }
+
+          return {
+            success: true,
+            readResult: serializeBigInts(decodedResult),
+          }
+        }
+
+        // For write functions, route through executor
         const executeParams: ExecuteParams = {
-          contractAddress: params.contractAddress as `0x${string}`,
+          contractAddress,
           functionName: params.functionName,
           args: params.args,
           value: params.value,
         }
 
-        // Build the transaction
         const tx = buildTransaction(exportData, agentId, executeParams)
-
-        // Sign and send via user's wallet
         const txHash = await signAndSend(tx)
 
         return {
@@ -90,68 +198,6 @@ export function createAutonomifyTool(config: AutonomifyToolConfig) {
         return {
           success: false,
           error: error instanceof Error ? error.message : "Execution failed",
-        }
-      }
-    },
-  })
-}
-
-/**
- * Create a simulation-only tool (no signing required)
- * Useful for testing if LLM outputs valid calls
- */
-export function createAutonomifySimulator(exportData: AutonomifyExport) {
-  const publicClient = createPublicClient({
-    transport: http(exportData.chain.rpc),
-  })
-
-  const contractList = Object.entries(exportData.contracts)
-    .map(([addr, c]) => `${c.name} (${addr})`)
-    .join(", ")
-
-  return tool({
-    description: `Simulate a smart contract function call (dry run). Available contracts: ${contractList}`,
-    parameters: z.object({
-      contractAddress: z
-        .string()
-        .describe("The contract address to call"),
-      functionName: z
-        .string()
-        .describe("The function name to call"),
-      args: z
-        .array(z.any())
-        .describe("Function arguments in order"),
-      value: z
-        .string()
-        .optional()
-        .describe("BNB to send (for payable functions)"),
-    }),
-    execute: async (params): Promise<ExecuteResult> => {
-      try {
-        const executeParams: ExecuteParams = {
-          contractAddress: params.contractAddress as `0x${string}`,
-          functionName: params.functionName,
-          args: params.args,
-          value: params.value,
-        }
-
-        const tx = buildSimulationTransaction(exportData, executeParams)
-
-        // Simulate via eth_call
-        const result = await publicClient.call({
-          to: tx.to,
-          data: tx.data,
-          value: tx.value,
-        })
-
-        return {
-          success: true,
-          simulationResult: result.data,
-        }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : "Simulation failed",
         }
       }
     },
