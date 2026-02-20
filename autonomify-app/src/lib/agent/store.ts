@@ -8,7 +8,7 @@
 import { eq } from "drizzle-orm"
 import { randomBytes } from "crypto"
 import type { Abi } from "viem"
-import { getChain, type Chain, type FunctionExport } from "autonomify-sdk"
+import { getChain, isTestnet, type Chain, type FunctionExport } from "autonomify-sdk"
 import { db, agents, agentContracts } from "@/lib/db"
 import type { Agent, AgentWallet, AgentContract, ChannelType } from "./types"
 import { createAgentWallet } from "./wallet"
@@ -54,7 +54,6 @@ function dbRowToAgent(
     }
   }
 
-  // Add self-hosted agent fields
   if (agent.type === "self_hosted") {
     agentData.agentIdBytes = agent.agentIdBytes || undefined
   }
@@ -66,7 +65,7 @@ export interface CreateAgentOptions {
   name: string
   channel: ChannelType
   ownerAddress: string
-  channelToken?: string // Telegram bot token, Discord bot token
+  channelToken?: string
 }
 
 export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
@@ -93,7 +92,6 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
     }
   }
 
-  // Hosted agent (telegram/discord): create Privy wallet
   const wallet = await generateWallet()
 
   const [agent] = await db
@@ -175,6 +173,13 @@ export async function deleteAgent(id: string): Promise<boolean> {
   return result.length > 0
 }
 
+export class ChainMismatchError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "ChainMismatchError"
+  }
+}
+
 export async function addContractToAgent(
   agentId: string,
   contract: AgentContract
@@ -182,7 +187,22 @@ export async function addContractToAgent(
   const agent = await getAgent(agentId)
   if (!agent) return undefined
 
-  // Check if contract already exists
+  // Chain validation: don't mix testnets and mainnets
+  if (agent.contracts.length > 0) {
+    const existingChainId = agent.contracts[0].chainId
+    const existingIsTestnet = isTestnet(existingChainId)
+    const newIsTestnet = isTestnet(contract.chainId)
+
+    if (existingIsTestnet !== newIsTestnet) {
+      const existingType = existingIsTestnet ? "testnet" : "mainnet"
+      const newType = newIsTestnet ? "testnet" : "mainnet"
+      throw new ChainMismatchError(
+        `Cannot mix ${existingType} and ${newType} chains. ` +
+        `Agent has ${existingType} contracts, but trying to add ${newType} contract.`
+      )
+    }
+  }
+
   const existing = await db.query.agentContracts.findFirst({
     where: (c, { and, eq: equals }) =>
       and(
@@ -219,6 +239,5 @@ export async function removeContractFromAgent(
       eq(agentContracts.agentId, agentId) &&
         eq(agentContracts.address, contractAddress.toLowerCase())
     )
-
   return getAgent(agentId)
 }

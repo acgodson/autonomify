@@ -22,6 +22,8 @@ export {
   EXECUTOR_ADDRESSES,
   EXECUTOR_ABI,
   getExecutorAddress,
+  isExecutorDeployed,
+  getDeployedChainIds,
   toBytes32,
 } from "./core/executor"
 
@@ -62,13 +64,33 @@ export {
 } from "./adapters/openai"
 
 export {
+  // Chain registry
+  CHAINS,
   chains,
+  // Chain access
   getChain,
-  getExplorerUrl,
-  getAddressUrl,
+  getChainOrThrow,
+  getChains,
   getMainnets,
   getTestnets,
+  getChainIds,
+  isChainSupported,
+  isTestnet,
+  // Explorer utilities
+  getExplorerUrl,
+  getAddressUrl,
+  getTokenUrl,
+  // RPC utilities
+  getRpcUrl,
+  getRpcUrls,
+  // Chain summaries (for API)
+  getChainSummary,
+  getChainSummaries,
+  // Types
   type Chain,
+  type ChainSummary,
+  type NetworkMode,
+  type ExplorerType,
 } from "./chains"
 
 export {

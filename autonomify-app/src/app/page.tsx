@@ -5,6 +5,7 @@ import Image from "next/image"
 import { FunctionList } from "@/components/function-list"
 import type { FunctionExport } from "autonomify-sdk"
 import { useWallet } from "@/lib/wallet"
+import { useNetwork, NetworkToggle, ChainSelector } from "@/contexts/network-context"
 
 interface ContractAnalysis {
   summary: string
@@ -16,6 +17,7 @@ interface ContractAnalysis {
 interface ContractData {
   address: string
   chain: string
+  chainId: number
   metadata: Record<string, unknown>
   functions: FunctionExport[]
   analysis?: ContractAnalysis
@@ -31,8 +33,6 @@ interface AgentData {
   agentIdBytes?: string
   contractCount: number
 }
-
-const CHAINS = [{ id: "bscTestnet", name: "BSC Testnet" }]
 
 const LOADING_WORDS = [
   "Fetching ABI...",
@@ -198,7 +198,7 @@ export default function Home() {
   } | null>(null)
 
   const [address, setAddress] = useState("")
-  const [chain, setChain] = useState("bscTestnet")
+  const { selectedChainId, setSelectedChainId, getChain } = useNetwork()
   const [loading, setLoading] = useState(false)
   const [loadingWordIndex, setLoadingWordIndex] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -257,7 +257,7 @@ export default function Home() {
 
     try {
       // Step 1: Resolve contract ABI and metadata
-      const res = await fetch(`/api/resolve?chain=${chain}&address=${address}`)
+      const res = await fetch(`/api/resolve?chainId=${selectedChainId}&address=${address}`)
       const json = await res.json()
 
       if (!json.ok) {
@@ -288,6 +288,7 @@ export default function Home() {
       setContract({
         address: json.data.address,
         chain: json.data.chain,
+        chainId: json.data.chainId,
         metadata: json.data.metadata,
         functions: json.data.functions,
         analysis,
@@ -323,6 +324,7 @@ export default function Home() {
             </span>
           </div>
           <div className="flex items-center gap-3">
+            <NetworkToggle />
             {isConnected && agents.length > 0 && (
               <button
                 onClick={() => setShowAgentPanel(!showAgentPanel)}
@@ -376,17 +378,12 @@ export default function Home() {
 
           <div className="bg-zinc-900/50 backdrop-blur rounded-2xl p-8 border border-zinc-800 mb-8 w-full max-w-4xl">
             <div className="flex gap-4">
-              <select
-                value={chain}
-                onChange={(e) => setChain(e.target.value)}
+              <ChainSelector
+                value={selectedChainId}
+                onChange={setSelectedChainId}
+                showOnlyReady={true}
                 className="bg-zinc-800 border border-zinc-700 rounded-xl px-5 py-5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27white%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3e%3cpolyline points=%276 9 12 15 18 9%27%3e%3c/polyline%3e%3c/svg%3e')] bg-[length:20px] bg-[right_1rem_center] bg-no-repeat pr-12"
-              >
-                {CHAINS.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              />
 
               <input
                 type="text"
@@ -642,7 +639,6 @@ export default function Home() {
               ]
             })
             setShowLaunchModal(false)
-            // Show self-hosted setup modal after creation
             if (agent.isNew && agent.type === "self_hosted" && agent.agentIdBytes) {
               setShowSelfHostedModal({
                 agentId: agent.id,
@@ -771,7 +767,7 @@ function LaunchModal({
         await fetch(`/api/agents/${selectedAgentId}/contracts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chain: "bscTestnet", address: contract.address }),
+          body: JSON.stringify({ chainId: contract.chainId, address: contract.address }),
         })
 
         const agent = agents.find((a) => a.id === selectedAgentId)!
@@ -818,7 +814,7 @@ function LaunchModal({
         await fetch(`/api/agents/${agentJson.data.id}/contracts`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chain: "bscTestnet", address: contract.address }),
+          body: JSON.stringify({ chainId: contract.chainId, address: contract.address }),
         })
 
         if (agentType === "telegram") {

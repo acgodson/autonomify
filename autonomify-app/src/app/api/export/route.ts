@@ -10,7 +10,6 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import {
-  getChain,
   getExecutorAddress,
   EXECUTOR_ABI,
   type AutonomifyExport,
@@ -23,35 +22,16 @@ import {
   resolveMetadata,
   extractFunctions,
 } from "@/lib/contracts"
+import {
+  resolveChainIdWithDefault,
+  getChainOrThrow,
+  DEFAULT_CHAIN_ID,
+} from "@/lib/chains"
 
 interface ExportRequest {
   chain?: string
   chainId?: number
   addresses: string[]
-}
-
-// Map legacy chain names to chain IDs
-function resolveChainId(chainParam?: string | number | null): number {
-  if (typeof chainParam === "number") return chainParam
-  if (!chainParam) return 97 // Default to BSC Testnet
-
-  // Try parsing as number first
-  const parsed = parseInt(chainParam, 10)
-  if (!isNaN(parsed)) return parsed
-
-  // Legacy name mapping
-  const legacyNames: Record<string, number> = {
-    bscTestnet: 97,
-    bscMainnet: 56,
-    bsc: 56,
-    ethereum: 1,
-    sepolia: 11155111,
-    polygon: 137,
-    arbitrum: 42161,
-    base: 8453,
-  }
-
-  return legacyNames[chainParam] || 97
 }
 
 // Build AutonomifyExport from resolved contracts
@@ -96,7 +76,7 @@ export async function GET(request: NextRequest) {
   }
 
   const addresses = addressesParam.split(",").map((a) => a.trim())
-  const chainId = resolveChainId(chainParam)
+  const chainId = resolveChainIdWithDefault(chainParam, DEFAULT_CHAIN_ID)
 
   return generateExportResponse(chainId, addresses)
 }
@@ -122,16 +102,19 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const chainId = body.chainId || resolveChainId(body.chain)
+  const chainId = body.chainId || resolveChainIdWithDefault(body.chain, DEFAULT_CHAIN_ID)
 
   return generateExportResponse(chainId, addresses)
 }
 
 async function generateExportResponse(chainId: number, addresses: string[]) {
-  const chain = getChain(chainId)
-  if (!chain) {
+  let chain: Chain
+  try {
+    chain = getChainOrThrow(chainId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : `Unknown chain ID: ${chainId}`
     return NextResponse.json<ApiResponse>(
-      { ok: false, error: `Unknown chain ID: ${chainId}` },
+      { ok: false, error: message },
       { status: 400 }
     )
   }
