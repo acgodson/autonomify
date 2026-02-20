@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getChain } from "autonomify-sdk"
 import {
   getAgent,
   addContractToAgent,
+  ChainMismatchError,
   type AgentContract,
   type ApiResponse,
 } from "@/lib/agent"
@@ -12,6 +12,11 @@ import {
   resolveMetadata,
   extractFunctions,
 } from "@/lib/contracts"
+import {
+  resolveChainIdWithDefault,
+  getChainOrThrow,
+  DEFAULT_CHAIN_ID,
+} from "@/lib/chains"
 
 interface AddContractBody {
   chain?: string // Chain ID as string (e.g., "97" or "56") or legacy name (e.g., "bscTestnet")
@@ -25,30 +30,6 @@ interface ContractResponse {
   chainId: number
   metadata: Record<string, unknown>
   functionCount: number
-}
-
-// Map legacy chain names to chain IDs
-function resolveChainId(chainParam?: string | number): number {
-  if (typeof chainParam === "number") return chainParam
-  if (!chainParam) return 97 // Default to BSC Testnet
-
-  // Try parsing as number first
-  const parsed = parseInt(chainParam, 10)
-  if (!isNaN(parsed)) return parsed
-
-  // Legacy name mapping
-  const legacyNames: Record<string, number> = {
-    bscTestnet: 97,
-    bscMainnet: 56,
-    bsc: 56,
-    ethereum: 1,
-    sepolia: 11155111,
-    polygon: 137,
-    arbitrum: 42161,
-    base: 8453,
-  }
-
-  return legacyNames[chainParam] || 97
 }
 
 export async function GET(
@@ -111,12 +92,16 @@ export async function POST(
     )
   }
 
-  const chainId = body.chainId || resolveChainId(body.chain)
-  const chain = getChain(chainId)
+  // Use centralized chain resolution
+  const chainId = resolveChainIdWithDefault(body.chainId || body.chain, DEFAULT_CHAIN_ID)
 
-  if (!chain) {
+  let chain
+  try {
+    chain = getChainOrThrow(chainId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : `Unknown chain ID: ${chainId}`
     return NextResponse.json<ApiResponse>(
-      { ok: false, error: `Unknown chain ID: ${chainId}` },
+      { ok: false, error: message },
       { status: 400 }
     )
   }
@@ -156,6 +141,15 @@ export async function POST(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error"
+
+    // Chain mismatch is a client error (400), not a server error (500)
+    if (error instanceof ChainMismatchError) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: message },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json<ApiResponse>(
       { ok: false, error: message },
       { status: 500 }

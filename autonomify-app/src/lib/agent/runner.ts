@@ -25,20 +25,27 @@ import {
   buildPrompt,
   forVercelAI,
   getExplorerUrl,
+  getExecutorAddress,
+  EXECUTOR_ABI,
+  getChainOrThrow,
   type AutonomifyExport,
   type StructuredCall,
 } from "autonomify-sdk"
+import { DEFAULT_CHAIN_ID } from "@/lib/chains"
 import type { Agent, AgentContract, ExecuteParams, SimulateResult, ExecuteResult } from "./types"
 import { executeViaExecutor, executeDirectly } from "./wallet"
+import { findContract, findAbiFunction } from "./utils"
 
 /**
  * Build an AutonomifyExport from agent contracts.
  * This is the format the SDK expects for validation and prompt generation.
  */
 export function buildAgentExport(agent: Agent): AutonomifyExport {
-
   const primaryContract = agent.contracts[0]
-  const chainId = primaryContract?.chainId || 97
+  const chainId = primaryContract?.chainId || DEFAULT_CHAIN_ID
+
+  // Get chain info from SDK (throws if invalid)
+  const chain = primaryContract?.chain || getChainOrThrow(chainId)
 
   const contracts: AutonomifyExport["contracts"] = {}
   for (const contract of agent.contracts) {
@@ -56,22 +63,23 @@ export function buildAgentExport(agent: Agent): AutonomifyExport {
     }
   }
 
+  // Get executor address from SDK (throws if not deployed)
+  const executorAddress = getExecutorAddress(chainId)
+
   return {
     version: "1.0.0",
     executor: {
-      address: (process.env.AUTONOMIFY_EXECUTOR_ADDRESS ||
-        "0xC62AeB774DF09a6C2554dC19f221BDc4DFfAD93C") as `0x${string}`,
-      abi: [],
+      address: executorAddress,
+      abi: EXECUTOR_ABI,
     },
     chain: {
       id: chainId,
-      name: primaryContract?.chain.name || "BNB Smart Chain Testnet",
-      rpc: primaryContract?.chain.rpc[0] || "https://data-seed-prebsc-1-s1.binance.org:8545",
+      name: chain.name,
+      rpc: chain.rpc[0],
     },
     contracts,
   }
 }
-
 
 export function buildAgentPrompt(agent: Agent): string {
   if (!agent.wallet) throw new Error("Agent wallet required")
@@ -88,13 +96,12 @@ export function buildAgentPrompt(agent: Agent): string {
   return agentContext + sdkPrompt
 }
 
-
 export function createAgentTool(agent: Agent) {
   if (!agent.wallet) throw new Error("Agent wallet required")
 
   const exportData = buildAgentExport(agent)
   const primaryContract = agent.contracts[0]
-  const chainId = primaryContract?.chainId || 97
+  const chainId = primaryContract?.chainId || DEFAULT_CHAIN_ID
 
   const { tool } = forVercelAI({
     export: exportData,
@@ -115,19 +122,10 @@ export function createAgentTool(agent: Agent) {
   return { tool }
 }
 
-
 export function validateAgentCall(agent: Agent, call: StructuredCall) {
   const exportData = buildAgentExport(agent)
   return validateCall(call, exportData)
 }
-
-
-function findContract(agent: Agent, address: string): AgentContract | undefined {
-  return agent.contracts.find(
-    (c) => c.address.toLowerCase() === address.toLowerCase()
-  )
-}
-
 
 function getClient(contract: AgentContract) {
   return createPublicClient({
@@ -144,11 +142,7 @@ export async function simulate(
     return { success: false, error: `Contract ${params.contractAddress} not found` }
   }
 
-  const fn = contract.abi.find(
-    (item): item is AbiFunction =>
-      item.type === "function" && item.name === params.functionName
-  )
-
+  const fn = findAbiFunction(contract.abi, params.functionName)
   if (!fn) {
     return { success: false, error: `Function ${params.functionName} not found` }
   }
@@ -206,11 +200,7 @@ export async function execute(
     return { success: false, error: `Contract ${params.contractAddress} not found` }
   }
 
-  const fn = contract.abi.find(
-    (item): item is AbiFunction =>
-      item.type === "function" && item.name === params.functionName
-  )
-
+  const fn = findAbiFunction(contract.abi, params.functionName)
   if (!fn) {
     return { success: false, error: `Function ${params.functionName} not found` }
   }
@@ -244,7 +234,6 @@ export async function execute(
     return { success: false, error: message }
   }
 }
-
 
 export async function getNativeBalance(
   chainId: number,

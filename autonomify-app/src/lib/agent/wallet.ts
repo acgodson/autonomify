@@ -86,14 +86,12 @@ export async function executeViaExecutor(
   // Convert agentId to bytes32
   const agentIdBytes32 = toBytes32(agentId)
 
-  // Encode the executor call
   const executorCalldata = encodeFunctionData({
     abi: EXECUTOR_ABI,
     functionName: "execute",
     args: [agentIdBytes32 as `0x${string}`, targetContract as `0x${string}`, targetCalldata],
   })
 
-  // CAIP-2 identifier for the chain
   const caip2 = `eip155:${chainId}`
 
   const response = await privy.wallets().ethereum().sendTransaction(walletId, {

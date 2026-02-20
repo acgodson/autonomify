@@ -9,7 +9,7 @@ import { Bot } from "grammy"
 import { generateText, tool } from "ai"
 import { openai } from "@ai-sdk/openai"
 import { z } from "zod"
-import { getChain } from "autonomify-sdk"
+import { getChain, getChainOrThrow } from "autonomify-sdk"
 import {
   type Agent,
   buildAgentPrompt,
@@ -21,8 +21,10 @@ import {
   addAssistantMessage,
   clearConversation,
   pruneOldMessages,
+  markMessageError,
 } from "@/lib/agent"
 import { forVercelAI } from "autonomify-sdk"
+import { DEFAULT_CHAIN_ID } from "@/lib/chains"
 
 const botInstances = new Map<string, Bot>()
 
@@ -37,7 +39,6 @@ export function getOrCreateBot(agent: Agent): Bot {
   const bot = new Bot(agent.channelToken)
   const wallet = agent.wallet
 
-  // /start command
   bot.command("start", async (ctx) => {
     const contractList = agent.contracts
       .map((c) => {
@@ -60,7 +61,6 @@ export function getOrCreateBot(agent: Agent): Bot {
     )
   })
 
-  // /wallet command
   bot.command("wallet", async (ctx) => {
     const chain = agent.contracts[0]?.chain
     const explorer = chain?.explorer || "https://testnet.bscscan.com"
@@ -72,16 +72,15 @@ export function getOrCreateBot(agent: Agent): Bot {
     )
   })
 
-  // /balance command
   bot.command("balance", async (ctx) => {
     try {
       const contract = agent.contracts[0]
-      const chainId = contract?.chainId || 97
-      const rpcUrl = contract?.chain.rpc[0] || "https://data-seed-prebsc-1-s1.binance.org:8545"
+      const chainId = contract?.chainId || DEFAULT_CHAIN_ID
+      const chain = contract?.chain || getChainOrThrow(chainId)
+      const rpcUrl = chain.rpc[0]
 
       const { formatted } = await getNativeBalance(chainId, rpcUrl, wallet.address)
-      const chain = getChain(chainId)
-      const symbol = chain?.nativeCurrency.symbol || "BNB"
+      const symbol = chain.nativeCurrency.symbol
 
       await ctx.reply(`My balance: ${formatted} ${symbol}`)
     } catch {
@@ -89,7 +88,6 @@ export function getOrCreateBot(agent: Agent): Bot {
     }
   })
 
-  // /contracts command
   bot.command("contracts", async (ctx) => {
     if (agent.contracts.length === 0) {
       await ctx.reply("No contracts configured yet.")
@@ -107,66 +105,86 @@ export function getOrCreateBot(agent: Agent): Bot {
     await ctx.reply(`Contracts:\n\n${list}`, { parse_mode: "Markdown" })
   })
 
-  // /clear command
   bot.command("clear", async (ctx) => {
     const chatId = ctx.chat.id.toString()
     await clearConversation(agent.id, chatId)
     await ctx.reply("Conversation history cleared. Starting fresh!")
   })
 
-  // Message handler - routes to LLM
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text
     const chatId = ctx.chat.id.toString()
+    const channelMessageId = ctx.message.message_id.toString()
 
     if (text.startsWith("/")) return
+
+    const { isNew, messageId, status } = await addUserMessage(
+      agent.id,
+      chatId,
+      text,
+      { channelMessageId }
+    )
+
+    if (!isNew) {
+      if (status === "processing") {
+        console.log(`Message ${channelMessageId} still processing, skipping`)
+        return
+      }
+      if (status === "completed") {
+        console.log(`Message ${channelMessageId} already completed, skipping`)
+        return
+      }
+      if (status === "error") {
+        console.log(`Message ${channelMessageId} previously errored, skipping`)
+        return
+      }
+    }
 
     await ctx.replyWithChatAction("typing")
 
     try {
-      const response = await processWithLLM(agent, chatId, text)
-      try {
-        await ctx.reply(response, { parse_mode: "Markdown" })
-      } catch {
-        await ctx.reply(response)
-      }
+      const response = await processWithLLM(agent, chatId, text, messageId!)
+      const sentMessage = await ctx.reply(response, { parse_mode: "Markdown" }).catch(() =>
+        ctx.reply(response)
+      )
+
+      await addAssistantMessage(agent.id, chatId, response, {
+        channelMessageId: sentMessage.message_id.toString(),
+        replyToMessageId: messageId,
+      })
     } catch (err) {
       console.error("LLM error:", err)
+      if (messageId) {
+        const errorMsg = err instanceof Error ? err.message : "Unknown error"
+        await markMessageError(messageId, errorMsg)
+      }
       await ctx.reply("Sorry, I encountered an error processing your request.")
     }
   })
-
   botInstances.set(agent.id, bot)
   return bot
 }
 
-/**
- * Process message with LLM using the SDK
- */
 async function processWithLLM(
   agent: Agent,
   chatId: string,
-  userMessage: string
+  userMessage: string,
+  _userMessageId: string
 ): Promise<string> {
   if (!agent.wallet) throw new Error("Agent wallet required")
   const agentWallet = agent.wallet
 
-  // Build system prompt using SDK
   const systemPrompt = buildAgentPrompt(agent)
 
-  // Get conversation history
   const history = await getConversationHistory(agent.id, chatId)
-  await addUserMessage(agent.id, chatId, userMessage)
 
-  // Build export for SDK
   const exportData = buildAgentExport(agent)
 
-  // Get chain info for native balance tool
   const contract = agent.contracts[0]
-  const chainId = contract?.chainId || 97
-  const rpcUrl = contract?.chain.rpc[0] || "https://data-seed-prebsc-1-s1.binance.org:8545"
+  const chainId = contract?.chainId || DEFAULT_CHAIN_ID
+  const chain = contract?.chain || getChainOrThrow(chainId)
+  const rpcUrl = chain.rpc[0]
 
-  // Create Vercel AI tool using SDK adapter
   const { tool: autonomifyTool } = forVercelAI({
     export: exportData,
     agentId: agent.id,
@@ -242,9 +260,7 @@ async function processWithLLM(
     responseText = result.text || "I processed your request but have no response."
   }
 
-  await addAssistantMessage(agent.id, chatId, responseText)
   await pruneOldMessages(agent.id, chatId)
-
   return responseText
 }
 

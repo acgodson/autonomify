@@ -19,20 +19,15 @@ export function FunctionList({ functions, descriptions }: FunctionListProps) {
     (f) => f.stateMutability === "nonpayable" || f.stateMutability === "payable"
   )
 
-  // Calculate arc positions for functions
-  // Left arc for read functions, right arc for write functions
+
   const getArcPosition = (index: number, total: number, side: "left" | "right") => {
-    // Arc spans from -60deg to 60deg (top to bottom through the side)
     const startAngle = -70
     const endAngle = 70
     const angleRange = endAngle - startAngle
     const angle = startAngle + (angleRange * (index + 0.5)) / Math.max(total, 1)
     const angleRad = (angle * Math.PI) / 180
 
-    // Radius of the arc (in percentage of container)
     const radius = 42
-
-    // Calculate x,y - center is at 50%, 50%
     const centerX = 50
     const centerY = 50
 

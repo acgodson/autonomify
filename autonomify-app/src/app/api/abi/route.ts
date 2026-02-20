@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { Abi, AbiItem } from "viem"
-import { getChain } from "autonomify-sdk"
+import { type Chain } from "autonomify-sdk"
 import { type ApiResponse } from "@/lib/agent"
 import { fetchAbi, isValidAddress } from "@/lib/contracts"
+import {
+  resolveChainIdWithDefault,
+  getChainOrThrow,
+  DEFAULT_CHAIN_ID,
+} from "@/lib/chains"
 
 interface AbiResponseData {
   address: string
@@ -10,29 +15,6 @@ interface AbiResponseData {
   abi: Abi
   source: string
   functionCount: number
-}
-
-// Map legacy chain names to chain IDs
-function resolveChainId(chainParam?: string | null): number {
-  if (!chainParam) return 97 // Default to BSC Testnet
-
-  // Try parsing as number first
-  const parsed = parseInt(chainParam, 10)
-  if (!isNaN(parsed)) return parsed
-
-  // Legacy name mapping
-  const legacyNames: Record<string, number> = {
-    bscTestnet: 97,
-    bscMainnet: 56,
-    bsc: 56,
-    ethereum: 1,
-    sepolia: 11155111,
-    polygon: 137,
-    arbitrum: 42161,
-    base: 8453,
-  }
-
-  return legacyNames[chainParam] || 97
 }
 
 export async function GET(request: NextRequest) {
@@ -54,11 +36,14 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const chainId = resolveChainId(chainParam)
-  const chain = getChain(chainId)
-  if (!chain) {
+  const chainId = resolveChainIdWithDefault(chainParam, DEFAULT_CHAIN_ID)
+  let chain: Chain
+  try {
+    chain = getChainOrThrow(chainId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : `Unknown chain ID: ${chainId}`
     return NextResponse.json<ApiResponse>(
-      { ok: false, error: `Unknown chain ID: ${chainId}` },
+      { ok: false, error: message },
       { status: 400 }
     )
   }

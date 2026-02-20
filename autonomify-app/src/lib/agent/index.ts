@@ -34,6 +34,7 @@ export {
   deleteAgent,
   addContractToAgent,
   removeContractFromAgent,
+  ChainMismatchError,
   type CreateAgentOptions,
 } from "./store"
 
@@ -63,4 +64,19 @@ export {
   addToolMessage,
   clearConversation,
   pruneOldMessages,
+  findMessageByChannelId,
+  markMessageError,
+  deleteMessageByChannelId,
+  softDeleteMessage,
+  type MessageStatus,
+  type AddMessageOptions,
 } from "./conversation"
+
+// Utilities
+export {
+  findContract,
+  findAbiFunction,
+  getAgentChainId,
+  hasContracts,
+  isAgentReady,
+} from "./utils"

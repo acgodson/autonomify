@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { Abi } from "viem"
-import { getChain, type Chain, type FunctionExport } from "autonomify-sdk"
+import { type Chain, type FunctionExport } from "autonomify-sdk"
 import { type ApiResponse } from "@/lib/agent"
 import {
   fetchAbi,
@@ -8,10 +8,16 @@ import {
   resolveMetadata,
   extractFunctions,
 } from "@/lib/contracts"
+import {
+  resolveChainIdWithDefault,
+  getChainOrThrow,
+  DEFAULT_CHAIN_ID,
+} from "@/lib/chains"
 
 interface ResolveResponseData {
   address: string
   chain: string
+  chainId: number
   metadata: Record<string, unknown>
   functions: FunctionExport[]
 }
@@ -24,32 +30,9 @@ interface FullResolveResponseData {
   functions: FunctionExport[]
 }
 
-// Map legacy chain names to chain IDs
-function resolveChainId(chainParam?: string | null): number {
-  if (!chainParam) return 97 // Default to BSC Testnet
-
-  // Try parsing as number first
-  const parsed = parseInt(chainParam, 10)
-  if (!isNaN(parsed)) return parsed
-
-  // Legacy name mapping
-  const legacyNames: Record<string, number> = {
-    bscTestnet: 97,
-    bscMainnet: 56,
-    bsc: 56,
-    ethereum: 1,
-    sepolia: 11155111,
-    polygon: 137,
-    arbitrum: 42161,
-    base: 8453,
-  }
-
-  return legacyNames[chainParam] || 97
-}
-
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
-  const chainParam = searchParams.get("chain")
+  const chainParam = searchParams.get("chain") || searchParams.get("chainId")
   const address = searchParams.get("address")
   const full = searchParams.get("full") === "true"
 
@@ -67,11 +50,16 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  const chainId = resolveChainId(chainParam)
-  const chain = getChain(chainId)
-  if (!chain) {
+  // Use the centralized chain resolution
+  const chainId = resolveChainIdWithDefault(chainParam, DEFAULT_CHAIN_ID)
+
+  let chain: Chain
+  try {
+    chain = getChainOrThrow(chainId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : `Unknown chain ID: ${chainId}`
     return NextResponse.json<ApiResponse>(
-      { ok: false, error: `Unknown chain ID: ${chainId}` },
+      { ok: false, error: message },
       { status: 400 }
     )
   }
@@ -95,12 +83,13 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Standard response for backwards compatibility
+    // Standard response
     return NextResponse.json<ApiResponse<ResolveResponseData>>({
       ok: true,
       data: {
         address,
         chain: chain.name,
+        chainId: chain.id,
         metadata,
         functions,
       },

@@ -2,10 +2,12 @@
 
 import { useState } from "react"
 import type { FunctionExport } from "autonomify-sdk"
+import { useNetwork, ChainSelector } from "@/contexts/network-context"
 
 interface ResolvedContract {
   address: string
   chain: string
+  chainId: number
   metadata: Record<string, unknown>
   functions: FunctionExport[]
 }
@@ -14,17 +16,18 @@ interface ContractInputProps {
   onContractResolved: (data: ResolvedContract) => void
 }
 
-const CHAINS = [
-  { id: "bscTestnet", name: "BSC Testnet" },
-]
-
 export function ContractInput({ onContractResolved }: ContractInputProps) {
+  const { selectedChainId, setSelectedChainId, getChain } = useNetwork()
   const [address, setAddress] = useState("")
-  const [chain, setChain] = useState("bscTestnet")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleFetch() {
+    if (!selectedChainId) {
+      setError("Select a chain")
+      return
+    }
+
     if (!address) {
       setError("Enter a contract address")
       return
@@ -34,7 +37,8 @@ export function ContractInput({ onContractResolved }: ContractInputProps) {
     setError(null)
 
     try {
-      const res = await fetch(`/api/resolve?chain=${chain}&address=${address}`)
+      // Use chainId (number) instead of legacy chain name
+      const res = await fetch(`/api/resolve?chainId=${selectedChainId}&address=${address}`)
       const json = await res.json()
 
       if (!json.ok) {
@@ -50,20 +54,16 @@ export function ContractInput({ onContractResolved }: ContractInputProps) {
     }
   }
 
+  const selectedChain = selectedChainId ? getChain(selectedChainId) : null
+
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
-        <select
-          value={chain}
-          onChange={(e) => setChain(e.target.value)}
-          className="bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {CHAINS.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <ChainSelector
+          value={selectedChainId}
+          onChange={setSelectedChainId}
+          showOnlyReady={true}
+        />
 
         <input
           type="text"
@@ -75,12 +75,18 @@ export function ContractInput({ onContractResolved }: ContractInputProps) {
 
         <button
           onClick={handleFetch}
-          disabled={loading}
+          disabled={loading || !selectedChainId}
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-lg transition-colors"
         >
           {loading ? "Resolving..." : "Fetch & Resolve"}
         </button>
       </div>
+
+      {selectedChain && (
+        <div className="text-xs text-zinc-500">
+          Explorer: {selectedChain.explorerUrl}
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-900/30 border border-red-800 text-red-400 px-4 py-3 rounded-lg">

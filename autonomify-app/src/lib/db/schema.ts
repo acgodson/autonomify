@@ -43,6 +43,7 @@ export const agentContracts = pgTable("agent_contracts", {
 })
 
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system", "tool"])
+export const messageStatusEnum = pgEnum("message_status", ["pending", "processing", "completed", "error"])
 
 // Conversation history for maintaining context
 export const conversationMessages = pgTable("conversation_messages", {
@@ -58,6 +59,17 @@ export const conversationMessages = pgTable("conversation_messages", {
   toolCallId: text("tool_call_id"),
   toolName: text("tool_name"),
   toolResult: jsonb("tool_result"),
+  // Channel-specific message ID (Telegram message_id, Discord message_id)
+  // Used as idempotency key to prevent duplicate processing
+  channelMessageId: text("channel_message_id"),
+  // For assistant messages, link to the user message they respond to
+  replyToMessageId: uuid("reply_to_message_id"),
+  // Processing status for user messages
+  status: messageStatusEnum("status").default("completed"),
+  // Error message if processing failed
+  errorMessage: text("error_message"),
+  // Soft delete flag - excluded from history but retained for audit
+  isDeleted: integer("is_deleted").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 

@@ -7,28 +7,40 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { webhookCallback } from "grammy"
-import { getAgent } from "@/lib/agent"
+import { getAgent, type ApiResponse } from "@/lib/agent"
 import { getTelegramBot } from "@/lib/channels"
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { agentId: string } }
 ) {
-  const agent = await getAgent(params.agentId)
+  try {
+    const agent = await getAgent(params.agentId)
 
-  if (!agent) {
-    return NextResponse.json({ error: "Agent not found" }, { status: 404 })
-  }
+    if (!agent) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: "Agent not found" },
+        { status: 404 }
+      )
+    }
 
-  if (!agent.channelToken || !agent.wallet) {
-    return NextResponse.json(
-      { error: "Agent not configured for Telegram" },
-      { status: 400 }
+    if (!agent.channelToken || !agent.wallet) {
+      return NextResponse.json<ApiResponse>(
+        { ok: false, error: "Agent not configured for Telegram" },
+        { status: 400 }
+      )
+    }
+
+    const bot = getTelegramBot(agent)
+    const handler = webhookCallback(bot, "std/http")
+
+    return handler(request)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Webhook handler error"
+    console.error("Telegram webhook error:", message)
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: message },
+      { status: 500 }
     )
   }
-
-  const bot = getTelegramBot(agent)
-  const handler = webhookCallback(bot, "std/http")
-
-  return handler(request)
 }
