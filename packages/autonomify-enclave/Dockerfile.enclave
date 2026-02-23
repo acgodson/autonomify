@@ -1,0 +1,40 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install Python for vsock-bridge and curl for downloading CRS data
+RUN apt-get update && apt-get install -y python3 iproute2 && rm -rf /var/lib/apt/lists/*
+
+# Copy package files
+COPY package*.json ./
+RUN npm install --omit=dev --ignore-scripts
+
+# Copy built artifacts
+COPY dist/ ./dist/
+COPY circuit/ ./circuit/
+COPY vsock-bridge.py ./
+COPY start.sh ./
+
+RUN chmod +x start.sh
+
+# CRITICAL: Copy WASM and worker files to accessible location
+RUN mkdir -p /app/wasm && \
+    find node_modules/@aztec/bb.js -name "*.wasm" -exec cp {} /app/wasm/ \; && \
+    find node_modules/@aztec/bb.js -name "*worker*.js" -exec cp {} /app/wasm/ \; && \
+    find node_modules/@aztec/bb.js -name "*worker*.mjs" -exec cp {} /app/wasm/ \; && \
+    echo "WASM files copied:" && ls -la /app/wasm/
+
+# CRITICAL: Pre-bundle CRS cache for offline proof generation (only 2.1MB!)
+# Copy the cached CRS files so proof generation works offline
+RUN mkdir -p /root/.bb-crs
+COPY bb-crs-cache/ /root/.bb-crs/
+
+# Set environment variables for Barretenberg
+ENV BB_BINARY_PATH=/app/wasm
+ENV NODE_OPTIONS="--max-old-space-size=1536"
+
+EXPOSE 5000 5001
+
+# Use start.sh directly as PID 1 (no entrypoint wrapper)
+ENTRYPOINT []
+CMD ["/app/start.sh"]

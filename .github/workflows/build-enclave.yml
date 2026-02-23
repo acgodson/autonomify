@@ -1,0 +1,80 @@
+name: Build Autonomify Enclave
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'packages/autonomify-enclave/**'
+      - '.github/workflows/build-enclave.yml'
+  pull_request:
+    paths:
+      - 'packages/autonomify-enclave/**'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/autonomify-enclave
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: packages/autonomify-enclave
+        run: |
+          rm -f package-lock.json
+          npm install
+
+      - name: Build TypeScript
+        working-directory: packages/autonomify-enclave
+        run: npm run build
+
+      - name: Extract version from package.json
+        id: package-version
+        working-directory: packages/autonomify-enclave
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}},value=${{ steps.package-version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.package-version.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: packages/autonomify-enclave
+          file: packages/autonomify-enclave/Dockerfile.enclave
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Output image details
+        run: |
+          echo "Image version: ${{ steps.package-version.outputs.version }}"
+          echo "Image tags: ${{ steps.meta.outputs.tags }}"
