@@ -1,0 +1,23 @@
+{
+  "name": "autonomify-circuit",
+  "version": "0.0.1",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test"
+  },
+  "devDependencies": {
+    "@aztec/bb.js": "1.2.0",
+    "@noir-lang/noir_js": "1.0.0-beta.11",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "hardhat": "^2.22.14",
+    "hardhat-noir": "^0.6.0"
+  },
+  "dependencies": {
+    "@aztec/foundation": "^3.0.1",
+    "@openzeppelin/contracts": "^5.4.0",
+    "circomlibjs": "^0.1.7",
+    "clipboardy": "^5.0.2",
+    "dotenv": "^17.2.3",
+    "ethers": "^6.16.0"
+  }
+}

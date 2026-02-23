@@ -9,9 +9,6 @@ import {
   type ReactNode,
 } from "react"
 
-// =============================================================================
-// TYPES
-// =============================================================================
 
 export type NetworkMode = "testnet" | "mainnet"
 
@@ -27,42 +24,25 @@ export interface ChainInfo {
 }
 
 interface NetworkContextValue {
-  // Network mode
   mode: NetworkMode
   setMode: (mode: NetworkMode) => void
   toggleMode: () => void
-
-  // Chains
   chains: ChainInfo[]
   readyChains: ChainInfo[]
   isLoading: boolean
   error: string | null
-
-  // Selected chain (for contract input)
   selectedChainId: number | null
   setSelectedChainId: (id: number) => void
-
-  // Utilities
   getChain: (id: number) => ChainInfo | undefined
   refetch: () => Promise<void>
 }
 
-// =============================================================================
-// CONTEXT
-// =============================================================================
-
 const NetworkContext = createContext<NetworkContextValue | null>(null)
 
-// =============================================================================
-// STORAGE KEY
-// =============================================================================
 
 const STORAGE_KEY = "autonomify:networkMode"
 const CHAIN_STORAGE_KEY = "autonomify:selectedChainId"
 
-// =============================================================================
-// PROVIDER
-// =============================================================================
 
 interface NetworkProviderProps {
   children: ReactNode
@@ -73,14 +53,13 @@ export function NetworkProvider({
   children,
   defaultMode = "testnet",
 }: NetworkProviderProps) {
-  // State
+
   const [mode, setModeState] = useState<NetworkMode>(defaultMode)
   const [chains, setChains] = useState<ChainInfo[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedChainId, setSelectedChainIdState] = useState<number | null>(null)
 
-  // Load saved mode from localStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -95,13 +74,11 @@ export function NetworkProvider({
     }
   }, [])
 
-  // Persist mode changes
   const setMode = useCallback((newMode: NetworkMode) => {
     setModeState(newMode)
     if (typeof window !== "undefined") {
       localStorage.setItem(STORAGE_KEY, newMode)
     }
-    // Clear selected chain when mode changes
     setSelectedChainIdState(null)
     if (typeof window !== "undefined") {
       localStorage.removeItem(CHAIN_STORAGE_KEY)
@@ -112,7 +89,6 @@ export function NetworkProvider({
     setMode(mode === "testnet" ? "mainnet" : "testnet")
   }, [mode, setMode])
 
-  // Persist selected chain
   const setSelectedChainId = useCallback((id: number) => {
     setSelectedChainIdState(id)
     if (typeof window !== "undefined") {
@@ -120,7 +96,6 @@ export function NetworkProvider({
     }
   }, [])
 
-  // Fetch chains from API
   const fetchChains = useCallback(async () => {
     setIsLoading(true)
     setError(null)
