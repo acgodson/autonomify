@@ -1,0 +1,8 @@
+{
+  "enclaveUrl": "http://your-enclave-url:8001",
+  "executorAddress": "0xYourExecutorContractAddress",
+  "authorizedKey": "0xYourAuthorizedPublicKey",
+  "chainSelector": "10344971235874465080",
+  "tenderlyRpc": "https://base-sepolia.gateway.tenderly.co/YOUR_TENDERLY_KEY",
+  "virtualTestnetRpc": "https://virtual.base-sepolia.eu.rpc.tenderly.co/YOUR_VNET_ID"
+}

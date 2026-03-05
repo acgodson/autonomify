@@ -1,0 +1,10 @@
+*.env
+bun.lock
+node_modules/
+
+# Config files with API keys
+executor/config.staging.json
+executor/config.production.json
+
+# Build artifacts
+*.cre_build_tmp.js
