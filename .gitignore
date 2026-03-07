@@ -33,3 +33,11 @@ hackathon-starter-kit
 packages/autonomify-sdk/test
 autonomify-app/scripts
 autonomify-app/drizzle
+
+# presentation files
+presentation/
+
+# contracts build outputs
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/

@@ -1,0 +1,20 @@
+# Autonomify - Base Sepolia Deployments
+
+Chain ID: 84532
+Explorer: https://sepolia.basescan.org
+
+## Core Contracts
+
+| Contract | Address |
+|----------|---------|
+| AutonomifyExecutor | `0xD44def7f75Fea04B402688FF14572129D2BEeb05` |
+| HonkVerifier | `0x50a99ae22140519cED197e7DaA3304743ed56cE1` |
+| DelegationManager | `0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3` |
+| CRE Forwarder | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
+
+## Test Contracts
+
+| Token | Address |
+|-------|---------|
+| WETH | `0x4200000000000000000000000000000000000006` |
+| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54566469C3d` |
