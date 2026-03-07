@@ -18,7 +18,7 @@ Autonomify solves this by separating **proposal** from **authorization** from **
 | **Chainlink CRE** | [docs/CRE.md](docs/CRE.md) | [`packages/autonomify-cre/executor/index.ts`](packages/autonomify-cre/executor/index.ts) |
 | **Tenderly** | [docs/TENDERLY.md](docs/TENDERLY.md) | [`packages/autonomify-cre/executor/lib/tenderly.ts`](packages/autonomify-cre/executor/lib/tenderly.ts) |
 | **ERC-7710 Delegation** | [docs/DELEGATION.md](docs/DELEGATION.md) | [`contracts/src/AutonomifyExecutor.sol:128`](contracts/src/AutonomifyExecutor.sol#L128) |
-| **ZK Proofs (Noir)** | [AUTONOMIFY_ARCHITECTURE.md](AUTONOMIFY_ARCHITECTURE.md#zk-policy-system) | [`circuits/noir/src/main.nr`](circuits/noir/src/main.nr) |
+| **ZK Proofs (Noir)** | [docs/ZK.md](docs/ZK.md) | [`circuits/noir/autonomify/src/main.nr:8`](circuits/noir/autonomify/src/main.nr#L8) |
 
 
 
@@ -48,7 +48,7 @@ To run locally, you'll need:
 
 ### Required API Keys
 
-Create `app/.env.local` from `app/.env.example` and fill in:
+Create `app/.env` from `app/.env.example` and fill in:
 
 ```env
 OPENAI_API_KEY=        # For AI agent LLM
@@ -64,7 +64,7 @@ cd autonomify
 pnpm install
 
 # Configure environment
-cp app/.env.example app/.env.local
+cp app/.env.example app/.env
 # Edit app/.env with your API keys
 
 # Start everything (ngrok + CRE + app)
@@ -72,7 +72,7 @@ pnpm start
 ```
 
 This will:
-1. Start ngrok tunnel and auto-inject the URL into `.env.local`
+1. Start ngrok tunnel and auto-inject the URL into `.env`
 2. Start CRE workflow simulation with `--broadcast`
 3. Start the Next.js dev server
 
