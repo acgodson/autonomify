@@ -1,6 +1,4 @@
-export const DEFAULT_CHAIN_ID = 84532
-
-export {
+import {
   type Chain,
   type ChainSummary,
   type NetworkMode,
@@ -26,13 +24,31 @@ export {
   getDeployedChainIds,
 } from "autonomify-sdk"
 
-import {
-  type Chain,
-  type NetworkMode,
-  getChains,
+export const DEFAULT_CHAIN_ID = 84532
+
+export type { Chain, ChainSummary, NetworkMode, ExplorerType }
+
+export {
+  CHAINS,
+  chains,
+  getChain,
   getChainOrThrow,
+  getChains,
+  getMainnets,
+  getTestnets,
+  getChainIds,
+  isChainSupported,
+  isTestnet,
+  getExplorerUrl,
+  getAddressUrl,
+  getTokenUrl,
+  getRpcUrl,
+  getRpcUrls,
+  getChainSummary,
+  getChainSummaries,
   isExecutorDeployed,
-} from "autonomify-sdk"
+  getDeployedChainIds,
+}
 
 export function getExplorerApiKey(chainId: number): string {
   const chain = getChainOrThrow(chainId)
@@ -71,7 +87,6 @@ export function getChainsWithAvailability(mode: NetworkMode = "all"): ChainAvail
       chain,
       executorDeployed,
       apiKeyConfigured,
-      // For hackathon: chain is ready if executor is deployed (API key optional)
       fullyReady: executorDeployed,
     }
   })

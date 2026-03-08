@@ -2,7 +2,7 @@ import type { Abi } from "viem"
 import type { Chain, FunctionExport } from "autonomify-sdk"
 
 export type { Chain, FunctionExport } from "autonomify-sdk"
-
+ 
 export type ChannelType = "telegram" | "discord" | "self_hosted"
 
 export type AgentType = ChannelType
@@ -13,6 +13,13 @@ export interface ApiResponse<T = unknown> {
   error?: string
 }
 
+export interface ContractAnalysis {
+  summary: string
+  contractType: string
+  capabilities: string[]
+  functionDescriptions: Record<string, string>
+}
+
 export interface AgentContract {
   address: string
   chainId: number
@@ -20,6 +27,7 @@ export interface AgentContract {
   abi: Abi
   metadata: Record<string, unknown>
   functions: FunctionExport[]
+  analysis?: ContractAnalysis
 }
 
 export interface Agent {

@@ -3,7 +3,7 @@ import { randomBytes } from "crypto"
 import type { Abi } from "viem"
 import { getChain, isTestnet, type Chain, type FunctionExport } from "autonomify-sdk"
 import { db, agents, agentContracts } from "@/lib/db"
-import type { Agent, AgentContract, ChannelType } from "./types"
+import type { Agent, AgentContract, ContractAnalysis, ChannelType } from "./types"
 
 function generateAgentIdBytes(): string {
   return "0x" + randomBytes(32).toString("hex")
@@ -29,6 +29,7 @@ function dbRowToAgent(
         abi: c.abi as Abi,
         metadata: c.metadata as Record<string, unknown>,
         functions: c.functions as FunctionExport[],
+        analysis: c.analysis as ContractAnalysis | undefined,
       }
     }),
     createdAt: agent.createdAt.getTime(),
@@ -171,6 +172,7 @@ export async function addContractToAgent(
     abi: contract.abi,
     metadata: contract.metadata,
     functions: contract.functions,
+    analysis: contract.analysis,
   })
 
   return getAgent(agentId)

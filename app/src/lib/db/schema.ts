@@ -103,6 +103,7 @@ export const agentContracts = pgTable("agent_contracts", {
   abi: jsonb("abi").notNull(),
   metadata: jsonb("metadata").notNull().default({}),
   functions: jsonb("functions").notNull().default([]),
+  analysis: jsonb("analysis"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 

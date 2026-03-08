@@ -30,16 +30,25 @@ export function buildAgentExport(agent: Agent): AutonomifyExport {
 
   const contracts: AutonomifyExport["contracts"] = {}
   for (const contract of agent.contracts) {
+    const functionDescriptions = contract.analysis?.functionDescriptions || {}
     contracts[contract.address.toLowerCase() as `0x${string}`] = {
       name: (contract.metadata.name as string) || contract.address.slice(0, 10),
       abi: contract.abi,
-      metadata: contract.metadata,
+      metadata: {
+        ...contract.metadata,
+        ...(contract.analysis && {
+          summary: contract.analysis.summary,
+          contractType: contract.analysis.contractType,
+          capabilities: contract.analysis.capabilities,
+        }),
+      },
       functions: contract.functions.map((fn) => ({
         name: fn.name,
         signature: fn.signature,
         stateMutability: fn.stateMutability,
         inputs: fn.inputs,
         outputs: fn.outputs,
+        description: functionDescriptions[fn.name],
       })),
     }
   }

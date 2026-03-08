@@ -19,7 +19,7 @@ const spaceMono = Space_Mono({
 
 export const metadata: Metadata = {
   title: "Autonomify",
-  description: "Turn any verified contract into a AI agent",
+  description: "On-demand AI Agents - Turn any smart contract into and autonomous agent on Chainlink runtime Environment (CRE)",
 }
 
 export default function RootLayout({

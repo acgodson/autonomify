@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
-import { FunctionList } from "@/components/function-list"
+import { FunctionList, AccountSetup, SmartAccountCard } from "@/components/organisms"
 import type { FunctionExport } from "autonomify-sdk"
 import { useWallet } from "@/lib/wallet"
 import { useNetwork, NetworkToggle, ChainSelector } from "@/contexts/network-context"
-import { AccountSetup, SmartAccountCard } from "@/components/account-setup"
 
 interface ContractAnalysis {
   summary: string
@@ -191,7 +190,6 @@ export default function Home() {
     agentIdBytes?: string
     isNew: boolean
   } | null>(null)
-  const [showExportModal, setShowExportModal] = useState(false)
   const [showSelfHostedModal, setShowSelfHostedModal] = useState<{
     agentId: string
     agentName: string
@@ -566,14 +564,6 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-zinc-800">
-                <button
-                  onClick={() => setShowExportModal(true)}
-                  className="text-zinc-500 hover:text-zinc-300 text-sm"
-                >
-                  Export as Tool Schema →
-                </button>
-              </div>
             </div>
           </>
         )}
@@ -712,13 +702,6 @@ export default function Home() {
         <LaunchedModal
           agent={launchedAgent}
           onClose={() => setLaunchedAgent(null)}
-        />
-      )}
-
-      {showExportModal && contract && (
-        <ExportModal
-          contract={contract}
-          onClose={() => setShowExportModal(false)}
         />
       )}
 
@@ -2205,140 +2188,6 @@ function ConnectWalletModal({
         >
           Cancel
         </button>
-      </div>
-    </div>
-  )
-}
-
-function ExportModal({
-  contract,
-  onClose,
-}: {
-  contract: ContractData
-  onClose: () => void
-}) {
-  const [format, setFormat] = useState<"json-schema" | "typescript" | "openai">("openai")
-  const [loading, setLoading] = useState(false)
-  const [exported, setExported] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-
-  async function handleExport() {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/tools/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contract: {
-            address: contract.address,
-            chain: { name: contract.chain },
-            functions: contract.functions,
-          },
-          format,
-          descriptions: contract.analysis?.functionDescriptions,
-        }),
-      })
-      const json = await res.json()
-      if (json.ok) {
-        setExported(JSON.stringify(json.data, null, 2))
-      }
-    } catch {
-      // Handle error silently
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  function handleCopy() {
-    if (exported) {
-      navigator.clipboard.writeText(exported)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
-
-  function handleDownload() {
-    if (exported) {
-      const blob = new Blob([exported], { type: "application/json" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${contract.address.slice(0, 10)}-tools-${format}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 w-full max-w-2xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">Export Tool Schema</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white">
-            ✕
-          </button>
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm text-zinc-400 mb-2">Export Format</label>
-          <div className="flex gap-2">
-            {(["openai", "json-schema", "typescript"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => {
-                  setFormat(f)
-                  setExported(null)
-                }}
-                className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                  format === f
-                    ? "bg-amber-500 text-zinc-900"
-                    : "bg-zinc-800 text-zinc-400 hover:text-white"
-                }`}
-              >
-                {f === "openai" ? "OpenAI Tools" : f === "json-schema" ? "JSON Schema" : "TypeScript"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-sm text-zinc-500 mb-4">
-          {format === "openai" && "Export as OpenAI function calling format. Compatible with GPT-4, Claude, and other LLM APIs."}
-          {format === "json-schema" && "Export as standard JSON Schema. Universal format for tool definitions."}
-          {format === "typescript" && "Export as TypeScript type definitions with function signatures."}
-        </p>
-
-        {!exported ? (
-          <button
-            onClick={handleExport}
-            disabled={loading}
-            className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 text-zinc-900 font-semibold py-3 rounded-xl transition-colors"
-          >
-            {loading ? "Exporting..." : "Generate Export"}
-          </button>
-        ) : (
-          <>
-            <div className="flex-1 min-h-0 mb-4 overflow-hidden">
-              <pre className="bg-zinc-800 rounded-xl p-4 text-sm text-zinc-300 overflow-auto h-full max-h-[40vh] font-mono">
-                {exported}
-              </pre>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleCopy}
-                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl transition-colors"
-              >
-                {copied ? "Copied!" : "Copy to Clipboard"}
-              </button>
-              <button
-                onClick={handleDownload}
-                className="flex-1 bg-amber-500 hover:bg-amber-400 text-zinc-900 font-semibold py-3 rounded-xl transition-colors"
-              >
-                Download JSON
-              </button>
-            </div>
-          </>
-        )}
       </div>
     </div>
   )

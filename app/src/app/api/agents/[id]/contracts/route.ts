@@ -18,10 +18,18 @@ import {
   DEFAULT_CHAIN_ID,
 } from "@/lib/chains"
 
+interface ContractAnalysis {
+  summary: string
+  contractType: string
+  capabilities: string[]
+  functionDescriptions: Record<string, string>
+}
+
 interface AddContractBody {
-  chain?: string // Chain ID as string (e.g., "97" or "56") or legacy name (e.g., "bscTestnet")
-  chainId?: number // Chain ID as number
+  chain?: string
+  chainId?: number
   address: string
+  analysis?: ContractAnalysis
 }
 
 interface ContractResponse {
@@ -118,6 +126,7 @@ export async function POST(
       abi,
       metadata,
       functions,
+      analysis: body.analysis,
     }
 
     const updated = await addContractToAgent(params.id, contract)

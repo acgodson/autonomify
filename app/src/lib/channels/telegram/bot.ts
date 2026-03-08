@@ -22,9 +22,7 @@ import { DEFAULT_CHAIN_ID } from "@/lib/chains"
 
 const botInstances = new Map<string, Bot>()
 
-/**
- * Register webhook with Telegram for an agent
- */
+
 export async function registerTelegramWebhook(
   agentId: string,
   botToken: string
@@ -63,9 +61,7 @@ export async function registerTelegramWebhook(
   }
 }
 
-/**
- * Get current webhook info for a bot
- */
+
 export async function getWebhookInfo(botToken: string): Promise<{
   url: string
   pending_update_count: number
@@ -98,12 +94,12 @@ export function getOrCreateBot(agent: Agent): Bot {
 
     await ctx.reply(
       `Welcome! I'm ${agent.name}, your onchain agent.\n\n` +
-        `Owner: \`${agent.ownerAddress}\`\n\n` +
-        `Contracts I can interact with:\n${contractList || "None yet"}\n\n` +
-        `Commands:\n` +
-        `/contracts - List available contracts\n` +
-        `/clear - Clear conversation history\n\n` +
-        `Or just tell me what you want to do!`,
+      `Owner: \`${agent.ownerAddress}\`\n\n` +
+      `Contracts I can interact with:\n${contractList || "None yet"}\n\n` +
+      `Commands:\n` +
+      `/contracts - List available contracts\n` +
+      `/clear - Clear conversation history\n\n` +
+      `Or just tell me what you want to do!`,
       { parse_mode: "Markdown" }
     )
   })
