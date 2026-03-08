@@ -280,7 +280,7 @@ export function AgentDetailModal({ agent, onClose, onOpenSetup }: AgentDetailMod
                     <div className="space-y-2">
                       {policy.whitelistedContracts.map((c) => (
                         <div key={c.address} className="text-sm">
-                          <div className="text-zinc-400">{c.name || "Unknown"}</div>
+                          <div className="text-zinc-400">{c.name || c.address.slice(0, 10)}</div>
                           <code className="text-xs text-blue-400 break-all">{c.address}</code>
                         </div>
                       ))}

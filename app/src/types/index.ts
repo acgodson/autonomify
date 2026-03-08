@@ -3,6 +3,7 @@ import type { FunctionExport } from "autonomify-sdk"
 export type AgentType = "telegram" | "discord" | "self_hosted"
 
 export interface ContractAnalysis {
+  name: string
   summary: string
   contractType: string
   capabilities: string[]

@@ -61,6 +61,8 @@ export function useWallet() {
   const [smartAccount, setSmartAccount] = useState<MetaMaskSmartAccount<any> | null>(null)
   const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null)
   const [isSmartAccountLoading, setIsSmartAccountLoading] = useState(false)
+  const [isAccountReady, setIsAccountReady] = useState(false)
+  const [showAccountSetup, setShowAccountSetup] = useState(false)
 
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy")
 
@@ -111,6 +113,42 @@ export function useWallet() {
     }
   }, [embeddedWallet, authenticated, privyReady, walletsReady])
 
+  const checkDelegationStatus = useCallback(async () => {
+    if (!smartAccountAddress) return
+
+    try {
+      const res = await fetch("/api/delegation", {
+        headers: { "x-user-address": smartAccountAddress },
+      })
+      const json = await res.json()
+
+      if (json.ok && json.data.hasDelegation) {
+        setIsAccountReady(true)
+        setShowAccountSetup(false)
+      } else {
+        setIsAccountReady(false)
+        setShowAccountSetup(true)
+      }
+    } catch {
+      setIsAccountReady(false)
+    }
+  }, [smartAccountAddress])
+
+  useEffect(() => {
+    if (!authenticated || !smartAccountAddress) {
+      setIsAccountReady(false)
+      setShowAccountSetup(false)
+      return
+    }
+
+    checkDelegationStatus()
+  }, [authenticated, smartAccountAddress, checkDelegationStatus])
+
+  const markAccountReady = useCallback(() => {
+    setIsAccountReady(true)
+    setShowAccountSetup(false)
+  }, [])
+
   const isReady = privyReady && walletsReady
   const isConnected = authenticated && !!smartAccountAddress
   const isConnecting = !isReady || isSmartAccountLoading
@@ -135,6 +173,11 @@ export function useWallet() {
     disconnect,
     user,
     smartAccount,
+    isAccountReady,
+    showAccountSetup,
+    setShowAccountSetup,
+    markAccountReady,
+    refreshAccountStatus: checkDelegationStatus,
   }
 }
 

@@ -19,6 +19,7 @@ import {
 } from "@/lib/chains"
 
 interface ContractAnalysis {
+  name: string
   summary: string
   contractType: string
   capabilities: string[]

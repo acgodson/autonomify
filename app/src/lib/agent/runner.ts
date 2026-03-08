@@ -2,9 +2,9 @@ import {
   createPublicClient,
   http,
   encodeFunctionData,
-  parseEther,
   formatEther,
   type Abi,
+  type AbiFunction,
 } from "viem"
 import {
   validateCall,
@@ -19,7 +19,7 @@ import {
 } from "autonomify-sdk"
 import { DEFAULT_CHAIN_ID } from "@/lib/chains"
 import type { Agent, AgentContract, ExecuteParams, SimulateResult, ExecuteResult } from "./types"
-import { executeViaCRE, simulateViaCRE, getDelegation } from "./cre"
+import { triggerCRE, getDelegation, type CRESimulationResult } from "./cre"
 import { findContract, findAbiFunction } from "./utils"
 
 export function buildAgentExport(agent: Agent): AutonomifyExport {
@@ -31,8 +31,14 @@ export function buildAgentExport(agent: Agent): AutonomifyExport {
   const contracts: AutonomifyExport["contracts"] = {}
   for (const contract of agent.contracts) {
     const functionDescriptions = contract.analysis?.functionDescriptions || {}
+    // Name fallback chain: metadata.name -> analysis.name -> analysis.contractType -> address prefix
+    const contractName =
+      (contract.metadata.name as string) ||
+      contract.analysis?.name ||
+      contract.analysis?.contractType ||
+      contract.address.slice(0, 10)
     contracts[contract.address.toLowerCase() as `0x${string}`] = {
-      name: (contract.metadata.name as string) || contract.address.slice(0, 10),
+      name: contractName,
       abi: contract.abi,
       metadata: {
         ...contract.metadata,
@@ -85,29 +91,17 @@ export function buildAgentPrompt(agent: Agent): string {
 
 export function createAgentTool(agent: Agent, userAddress: string, permissionsContext: string) {
   const exportData = buildAgentExport(agent)
-  const primaryContract = agent.contracts[0]
-  const chainId = primaryContract?.chainId || DEFAULT_CHAIN_ID
 
   const { tool } = forVercelAI({
     export: exportData,
-    agentId: agent.id,
-    signAndSend: async (tx) => {
-      const contract = agent.contracts.find(
-        (c) => c.address.toLowerCase() === tx.to.toLowerCase()
-      )
-
-      if (!contract) {
-        throw new Error(`Contract ${tx.to} not found in agent`)
-      }
-
-      const result = await executeViaCRE({
+    agentId: agent.agentIdBytes!,
+    submitTx: async (tx) => {
+      // tx.data is already encoded by the SDK - pass it directly to CRE
+      const result = await triggerCRE({
         userAddress,
         agentId: agent.agentIdBytes!,
-        chainId,
-        targetContract: tx.to,
-        functionAbi: contract.abi,
-        functionName: "execute",
-        args: [],
+        target: tx.to,
+        calldata: tx.data,
         value: tx.value?.toString() || "0",
         permissionsContext,
         simulateOnly: false,
@@ -158,17 +152,21 @@ export async function simulate(
   try {
     const argsArray = Object.values(params.args)
 
-    const result = await simulateViaCRE({
-      userAddress,
-      agentId: agent.agentIdBytes!,
-      chainId: contract.chainId,
-      targetContract: params.contractAddress,
-      functionAbi: [fn] as Abi,
+    const calldata = encodeFunctionData({
+      abi: [fn] as Abi,
       functionName: params.functionName,
       args: argsArray,
+    })
+
+    const result = await triggerCRE({
+      userAddress,
+      agentId: agent.agentIdBytes!,
+      target: params.contractAddress,
+      calldata,
       value: params.value || "0",
       permissionsContext: delegation.signedDelegation,
-    })
+      simulateOnly: true,
+    }) as CRESimulationResult
 
     return {
       success: result.success,
@@ -207,14 +205,17 @@ export async function execute(
   try {
     const argsArray = Object.values(params.args)
 
-    const result = await executeViaCRE({
-      userAddress,
-      agentId: agent.agentIdBytes!,
-      chainId: contract.chainId,
-      targetContract: params.contractAddress,
-      functionAbi: [fn] as Abi,
+    const calldata = encodeFunctionData({
+      abi: [fn] as Abi,
       functionName: params.functionName,
       args: argsArray,
+    })
+
+    const result = await triggerCRE({
+      userAddress,
+      agentId: agent.agentIdBytes!,
+      target: params.contractAddress,
+      calldata,
       value: params.value || "0",
       permissionsContext: delegation.signedDelegation,
       simulateOnly: false,

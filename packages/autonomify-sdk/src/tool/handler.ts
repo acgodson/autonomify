@@ -8,7 +8,7 @@ export async function executeCall(
   call: StructuredCall
 ): Promise<ExecuteResult> {
   const exportData = config.export
-  const { agentId, signAndSend, rpcUrl } = config
+  const { agentId, submitTx, rpcUrl } = config
 
   try {
     const contractAddress = getAddress(call.contractAddress) as `0x${string}`
@@ -67,7 +67,7 @@ export async function executeCall(
       value: call.value,
     })
 
-    const txHash = await signAndSend(tx)
+    const txHash = await submitTx(tx)
 
     return { success: true, txHash }
   } catch (error) {

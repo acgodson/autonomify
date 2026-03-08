@@ -1,6 +1,5 @@
-import { createPublicClient, http, encodeFunctionData, type Abi } from "viem"
+import { createPublicClient, http } from "viem"
 import { baseSepolia } from "viem/chains"
-import { getExecutorAddress } from "autonomify-sdk"
 
 const METAMASK_DELEGATOR = "0x63c0c19a282a1b52b07dd5a65b58948a07dae32b"
 const CRE_TRIGGER_URL = process.env.CRE_TRIGGER_URL || "http://localhost:8080/trigger"
@@ -29,14 +28,14 @@ export async function contractExists(address: string): Promise<boolean> {
   return !!code && code !== "0x"
 }
 
-export interface CREExecuteParams {
+/**
+ * Simplified CRE trigger params - accepts pre-encoded calldata
+ */
+export interface CRETriggerParams {
   userAddress: string
-  agentId: string
-  chainId: number
-  targetContract: string
-  functionAbi: Abi
-  functionName: string
-  args: unknown[]
+  agentId: string  // bytes32 format (0x + 64 hex chars)
+  target: string
+  calldata: string  
   value?: string
   permissionsContext: string
   simulateOnly?: boolean
@@ -80,36 +79,20 @@ export interface CREExecutionResult {
 
 export type CREResult = CRESimulationResult | CREExecutionResult
 
-export async function executeViaCRE(params: CREExecuteParams): Promise<CREResult> {
-  const {
-    userAddress,
-    agentId,
-    chainId,
-    targetContract,
-    functionAbi,
-    functionName,
-    args,
-    value = "0",
-    permissionsContext,
-    simulateOnly = false,
-  } = params
-
-  const calldata = encodeFunctionData({
-    abi: functionAbi,
-    functionName,
-    args,
-  })
-
+/**
+ * Trigger CRE workflow with pre-encoded calldata
+ */
+export async function triggerCRE(params: CRETriggerParams): Promise<CREResult> {
   const payload = {
-    userAddress,
-    agentId,
+    userAddress: params.userAddress,
+    agentId: params.agentId,
     execution: {
-      target: targetContract,
-      value,
-      calldata,
+      target: params.target,
+      value: params.value || "0",
+      calldata: params.calldata,
     },
-    permissionsContext,
-    simulateOnly,
+    permissionsContext: params.permissionsContext,
+    simulateOnly: params.simulateOnly ?? false,
   }
 
   const response = await fetch(CRE_TRIGGER_URL, {
@@ -123,11 +106,6 @@ export async function executeViaCRE(params: CREExecuteParams): Promise<CREResult
   }
 
   return response.json()
-}
-
-export async function simulateViaCRE(params: Omit<CREExecuteParams, "simulateOnly">): Promise<CRESimulationResult> {
-  const result = await executeViaCRE({ ...params, simulateOnly: true })
-  return result as CRESimulationResult
 }
 
 export interface EnclavePolicyConfig {

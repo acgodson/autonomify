@@ -11,6 +11,7 @@ interface AnalyzeBody {
 }
 
 interface ContractAnalysis {
+  name: string
   summary: string
   contractType: string
   capabilities: string[]
@@ -59,10 +60,11 @@ Functions:
 ${functionsStr}
 
 Respond with a JSON object containing:
-1. "summary": A 1-2 sentence description of what this contract does
-2. "contractType": The type of contract (e.g., "ERC-20 Token", "DEX Router", "NFT Collection", "Staking Contract", etc.)
-3. "capabilities": An array of 3-5 key things users can do with this contract
-4. "functionDescriptions": An object mapping function names to brief descriptions of what they do
+1. "name": A short, descriptive name for this contract (e.g., "USDC Token", "Uniswap V3 Router", "OpenSea NFT"). Use the token name/symbol if available in metadata, otherwise derive from contract type.
+2. "summary": A 1-2 sentence description of what this contract does
+3. "contractType": The type of contract (e.g., "ERC-20 Token", "DEX Router", "NFT Collection", "Staking Contract", etc.)
+4. "capabilities": An array of 3-5 key things users can do with this contract
+5. "functionDescriptions": An object mapping function names to brief descriptions of what they do
 
 Only respond with valid JSON, no markdown or explanation.`
 
@@ -85,7 +87,8 @@ Only respond with valid JSON, no markdown or explanation.`
     } catch {
       // If parsing fails, create a basic response
       analysis = {
-        summary: "A smart contract on BSC with various functions.",
+        name: "Smart Contract",
+        summary: "A smart contract with various functions.",
         contractType: "Smart Contract",
         capabilities: ["Execute contract functions", "Read contract state"],
         functionDescriptions: {},

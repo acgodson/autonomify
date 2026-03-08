@@ -7,7 +7,9 @@ export type {
   ExecuteParams,
   UnsignedTransaction,
   ExecuteResult,
-  SignAndSendFn,
+  SubmitTxFn,
+  SimulationResult,
+  SimulateTxFn,
   ToolConfig,
   StructuredCall,
 } from "./types"
@@ -58,16 +60,15 @@ export {
 
 export {
   createOpenAITool,
+  createOpenAISimulateTool,
   forOpenAI,
   type OpenAIToolDef,
   type OpenAIToolCall,
 } from "./adapters/openai"
 
 export {
-  // Chain registry
   CHAINS,
   chains,
-  // Chain access
   getChain,
   getChainOrThrow,
   getChains,
@@ -76,17 +77,17 @@ export {
   getChainIds,
   isChainSupported,
   isTestnet,
-  // Explorer utilities
   getExplorerUrl,
   getAddressUrl,
   getTokenUrl,
-  // RPC utilities
   getRpcUrl,
   getRpcUrls,
-  // Chain summaries (for API)
   getChainSummary,
   getChainSummaries,
-  // Types
+  getTenderlyRpc,
+  getVirtualTestnetRpc,
+  hasTenderlySupport,
+  getBestRpcUrl,
   type Chain,
   type ChainSummary,
   type NetworkMode,

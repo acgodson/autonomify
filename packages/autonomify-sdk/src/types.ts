@@ -60,12 +60,23 @@ export interface ExecuteResult {
   simulationResult?: string
 }
 
-export type SignAndSendFn = (tx: UnsignedTransaction) => Promise<string>
+export type SubmitTxFn = (tx: UnsignedTransaction) => Promise<string>
+
+export interface SimulationResult {
+  success: boolean
+  wouldSucceed: boolean
+  gasEstimate?: number
+  error?: string
+  message?: string
+}
+
+export type SimulateTxFn = (tx: UnsignedTransaction) => Promise<SimulationResult>
 
 export interface ToolConfig {
   export: AutonomifyExport
   agentId: string
-  signAndSend: SignAndSendFn
+  submitTx: SubmitTxFn
+  simulateTx?: SimulateTxFn
   rpcUrl?: string
 }
 

@@ -14,6 +14,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface ContractAnalysis {
+  name: string
   summary: string
   contractType: string
   capabilities: string[]

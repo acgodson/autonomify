@@ -121,78 +121,121 @@ export function SelfHostedSetupModal({
   }'`
     : null
 
-  const vercelCode = `import { createAutonomifyTool, buildSystemPrompt } from 'autonomify-sdk'
+  const vercelCode = `import { forVercelAI, buildPrompt } from 'autonomify-sdk'
 import { generateText } from 'ai'
 import { openai } from '@ai-sdk/openai'
-import { createWalletClient, http } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import config from './autonomify.json'
 
-const account = privateKeyToAccount(process.env.PRIVATE_KEY)
-const walletClient = createWalletClient({
-  account,
-  chain: baseSepolia,
-  transport: http(),
-})
+const CRE_TRIGGER_URL = process.env.CRE_TRIGGER_URL || 'http://localhost:8080/trigger'
+const AGENT_ID = '${agentIdBytes}'
+const USER_ADDRESS = '${smartAccountAddress}'
+const SIGNED_DELEGATION = '${signedDelegation || "<your-signed-delegation>"}'
 
-const signAndSend = async (tx) => {
-  return await walletClient.sendTransaction({
-    to: tx.to,
-    data: tx.data,
-    value: tx.value,
+// Trigger CRE workflow - no private key needed!
+async function triggerCRE(tx, simulateOnly = false) {
+  const response = await fetch(CRE_TRIGGER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userAddress: USER_ADDRESS,
+      agentId: AGENT_ID,
+      execution: {
+        target: tx.to,
+        calldata: tx.data,
+        value: tx.value?.toString() || '0',
+      },
+      permissionsContext: SIGNED_DELEGATION,
+      simulateOnly,
+    }),
   })
+  return response.json()
 }
 
-const autonomifyTool = createAutonomifyTool({
+const { tool, simulateTool } = forVercelAI({
   export: config,
-  agentId: '${agentIdBytes}',
-  signAndSend,
+  agentId: AGENT_ID,
+  submitTx: async (tx) => {
+    const result = await triggerCRE(tx, false)
+    if (!result.success) throw new Error(result.error?.toString())
+    return result.txHash
+  },
+  simulateTx: async (tx) => {
+    const result = await triggerCRE(tx, true)
+    return {
+      success: result.success,
+      wouldSucceed: result.success,
+      gasEstimate: result.gasEstimate,
+      error: result.error?.recommendation || result.error?.decoded,
+    }
+  },
 })
 
 const { text } = await generateText({
   model: openai('gpt-4o'),
-  system: buildSystemPrompt(config),
-  tools: { autonomify_execute: autonomifyTool },
-  prompt: 'Transfer 1 LINK to 0x...',
+  system: buildPrompt(config),
+  tools: {
+    autonomify_execute: tool,
+    ...(simulateTool && { autonomify_simulate: simulateTool }),
+  },
+  prompt: 'Simulate transferring 1 LINK to 0x...',
   maxSteps: 5,
 })`
 
-  const openaiCode = `import { createOpenAITool, buildSystemPrompt } from 'autonomify-sdk'
+  const openaiCode = `import { forOpenAI, buildPrompt } from 'autonomify-sdk'
 import OpenAI from 'openai'
-import { createWalletClient, http } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
 import config from './autonomify.json'
 
 const openai = new OpenAI()
 
-const account = privateKeyToAccount(process.env.PRIVATE_KEY)
-const walletClient = createWalletClient({
-  account,
-  chain: baseSepolia,
-  transport: http(),
-})
+const CRE_TRIGGER_URL = process.env.CRE_TRIGGER_URL || 'http://localhost:8080/trigger'
+const AGENT_ID = '${agentIdBytes}'
+const USER_ADDRESS = '${smartAccountAddress}'
+const SIGNED_DELEGATION = '${signedDelegation || "<your-signed-delegation>"}'
 
-const signAndSend = async (tx) => {
-  return await walletClient.sendTransaction({
-    to: tx.to,
-    data: tx.data,
-    value: tx.value,
+// Trigger CRE workflow - no private key needed!
+async function triggerCRE(tx, simulateOnly = false) {
+  const response = await fetch(CRE_TRIGGER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userAddress: USER_ADDRESS,
+      agentId: AGENT_ID,
+      execution: {
+        target: tx.to,
+        calldata: tx.data,
+        value: tx.value?.toString() || '0',
+      },
+      permissionsContext: SIGNED_DELEGATION,
+      simulateOnly,
+    }),
   })
+  return response.json()
 }
 
-const { tools, handler } = createOpenAITool({
+const { tools, handler } = forOpenAI({
   export: config,
-  agentId: '${agentIdBytes}',
-  signAndSend,
+  agentId: AGENT_ID,
+  submitTx: async (tx) => {
+    const result = await triggerCRE(tx, false)
+    if (!result.success) throw new Error(result.error?.toString())
+    return result.txHash
+  },
+  simulateTx: async (tx) => {
+    const result = await triggerCRE(tx, true)
+    return {
+      success: result.success,
+      wouldSucceed: result.success,
+      gasEstimate: result.gasEstimate,
+      error: result.error?.recommendation || result.error?.decoded,
+    }
+  },
 })
 
 const response = await openai.chat.completions.create({
   model: 'gpt-4o',
   messages: [
-    { role: 'system', content: buildSystemPrompt(config) },
-    { role: 'user', content: 'Transfer 1 LINK to 0x...' },
+    { role: 'system', content: buildPrompt(config) },
+    { role: 'user', content: 'Simulate transferring 1 LINK to 0x...' },
   ],
   tools,
 })

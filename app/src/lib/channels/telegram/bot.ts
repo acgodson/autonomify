@@ -1,14 +1,11 @@
 import { Bot } from "grammy"
-import { generateText, tool } from "ai"
+import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
-import { z } from "zod"
 import { getChainOrThrow } from "autonomify-sdk"
 import {
   type Agent,
   buildAgentPrompt,
   buildAgentExport,
-  getNativeBalance,
-  executeViaCRE,
   getDelegation,
   getConversationHistory,
   addUserMessage,
@@ -17,11 +14,10 @@ import {
   pruneOldMessages,
   markMessageError,
 } from "@/lib/agent"
-import { forVercelAI } from "autonomify-sdk"
+import { createAgentTools } from "@/lib/channels/tools"
 import { DEFAULT_CHAIN_ID } from "@/lib/chains"
 
 const botInstances = new Map<string, Bot>()
-
 
 export async function registerTelegramWebhook(
   agentId: string,
@@ -60,7 +56,6 @@ export async function registerTelegramWebhook(
     return { success: false, error: message }
   }
 }
-
 
 export async function getWebhookInfo(botToken: string): Promise<{
   url: string
@@ -112,7 +107,11 @@ export function getOrCreateBot(agent: Agent): Bot {
 
     const list = agent.contracts
       .map((c) => {
-        const name = (c.metadata.name as string) || "Unknown"
+        const name =
+          (c.metadata.name as string) ||
+          c.analysis?.name ||
+          c.analysis?.contractType ||
+          c.address.slice(0, 10)
         const symbol = (c.metadata.symbol as string) || ""
         return `- ${name}${symbol ? ` (${symbol})` : ""}\n  \`${c.address}\`\n  ${c.functions.length} functions`
       })
@@ -159,7 +158,7 @@ export function getOrCreateBot(agent: Agent): Bot {
     await ctx.replyWithChatAction("typing")
 
     try {
-      const response = await processWithLLM(agent, chatId, text, messageId!)
+      const response = await processWithLLM(agent, chatId, text)
       const sentMessage = await ctx.reply(response, { parse_mode: "Markdown" }).catch(() =>
         ctx.reply(response)
       )
@@ -177,6 +176,7 @@ export function getOrCreateBot(agent: Agent): Bot {
       await ctx.reply("Sorry, I encountered an error processing your request.")
     }
   })
+
   botInstances.set(agent.id, bot)
   return bot
 }
@@ -184,8 +184,7 @@ export function getOrCreateBot(agent: Agent): Bot {
 async function processWithLLM(
   agent: Agent,
   chatId: string,
-  userMessage: string,
-  _userMessageId: string
+  userMessage: string
 ): Promise<string> {
   const systemPrompt = buildAgentPrompt(agent)
   const history = await getConversationHistory(agent.id, chatId)
@@ -201,37 +200,13 @@ async function processWithLLM(
     return "Owner has not set up delegation yet. Please ask them to complete account setup on the Autonomify dashboard."
   }
 
-  const { tool: autonomifyTool } = forVercelAI({
-    export: exportData,
-    agentId: agent.id,
-    signAndSend: async (tx) => {
-      const targetContract = agent.contracts.find(
-        (c) => c.address.toLowerCase() === tx.to.toLowerCase()
-      )
-
-      if (!targetContract) {
-        throw new Error(`Contract ${tx.to} not found`)
-      }
-
-      const result = await executeViaCRE({
-        userAddress: agent.ownerAddress,
-        agentId: agent.id,
-        chainId,
-        targetContract: tx.to,
-        functionAbi: targetContract.abi,
-        functionName: "execute",
-        args: [],
-        value: tx.value?.toString() || "0",
-        permissionsContext: delegation.signedDelegation,
-        simulateOnly: false,
-      })
-
-      if (!result.success || result.mode !== "execution") {
-        throw new Error(result.error?.toString() || "Execution failed")
-      }
-
-      return result.txHash || ""
-    },
+  const tools = createAgentTools({
+    exportData,
+    agentIdBytes: agent.agentIdBytes!,
+    ownerAddress: agent.ownerAddress,
+    signedDelegation: delegation.signedDelegation,
+    chainId,
+    rpcUrl,
   })
 
   const messages = [
@@ -247,18 +222,7 @@ async function processWithLLM(
     model: openai("gpt-4o-mini"),
     system: systemPrompt,
     messages,
-    tools: {
-      autonomify_execute: autonomifyTool,
-      get_native_balance: tool({
-        description: "Get the native token balance of a wallet address.",
-        parameters: z.object({
-          address: z.string().describe("The wallet address to check"),
-        }),
-        execute: async ({ address }) => {
-          return getNativeBalance(chainId, rpcUrl, address)
-        },
-      }),
-    },
+    tools,
     maxSteps: 2,
     abortSignal: abortController.signal,
     onStepFinish: ({ toolCalls }) => {
@@ -285,9 +249,7 @@ async function processWithLLM(
 
   let responseText: string
   if (loopDetected) {
-    responseText =
-      result.text ||
-      "I ran into an issue with that request. Please try rephrasing."
+    responseText = result.text || "I ran into an issue with that request. Please try rephrasing."
   } else {
     responseText = result.text || "I processed your request but have no response."
   }

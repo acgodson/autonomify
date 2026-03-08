@@ -33,9 +33,23 @@ Before ANY write operation (transfers, swaps, approvals):
 
 ---
 
-## Tool: autonomify_execute
+## Tools
 
-You have ONE tool for ALL contract interactions.
+You have two tools for contract interactions:
+
+### autonomify_execute
+Executes transactions onchain. Use this for actual transfers, approvals, swaps, etc.
+
+### autonomify_simulate (if available)
+Simulates a transaction WITHOUT executing it. Use when the user asks to:
+- "simulate", "test", "dry run", or "check if this would work"
+- Verify a transaction before committing
+
+After simulation, report whether it would succeed and estimated gas.
+
+---
+
+## Tool: autonomify_execute
 
 ### Format
 
