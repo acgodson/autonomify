@@ -1,16 +1,3 @@
-/**
- * Agent Runner
- *
- * Executes contract functions using the Autonomify SDK.
- * This file showing how to integrate the SDK with an LLM.
- *
- * The runner:
- * 1. Validates LLM-generated calls using SDK's validateCall
- * 2. Builds AutonomifyExport from agent contracts
- * 3. Uses SDK's forVercelAI() adapter for tool execution
- * 4. Routes transactions through the AutonomifyExecutor
- */
-
 import {
   createPublicClient,
   http,
@@ -18,7 +5,6 @@ import {
   parseEther,
   formatEther,
   type Abi,
-  type AbiFunction,
 } from "viem"
 import {
   validateCall,
@@ -33,18 +19,13 @@ import {
 } from "autonomify-sdk"
 import { DEFAULT_CHAIN_ID } from "@/lib/chains"
 import type { Agent, AgentContract, ExecuteParams, SimulateResult, ExecuteResult } from "./types"
-import { executeViaExecutor, executeDirectly } from "./wallet"
+import { executeViaCRE, simulateViaCRE, getDelegation } from "./cre"
 import { findContract, findAbiFunction } from "./utils"
 
-/**
- * Build an AutonomifyExport from agent contracts.
- * This is the format the SDK expects for validation and prompt generation.
- */
 export function buildAgentExport(agent: Agent): AutonomifyExport {
   const primaryContract = agent.contracts[0]
   const chainId = primaryContract?.chainId || DEFAULT_CHAIN_ID
 
-  // Get chain info from SDK (throws if invalid)
   const chain = primaryContract?.chain || getChainOrThrow(chainId)
 
   const contracts: AutonomifyExport["contracts"] = {}
@@ -63,7 +44,6 @@ export function buildAgentExport(agent: Agent): AutonomifyExport {
     }
   }
 
-  // Get executor address from SDK (throws if not deployed)
   const executorAddress = getExecutorAddress(chainId)
 
   return {
@@ -82,23 +62,19 @@ export function buildAgentExport(agent: Agent): AutonomifyExport {
 }
 
 export function buildAgentPrompt(agent: Agent): string {
-  if (!agent.wallet) throw new Error("Agent wallet required")
-
   const exportData = buildAgentExport(agent)
   const sdkPrompt = buildPrompt(exportData)
 
   const agentContext = `## YOUR IDENTITY
 - Agent: ${agent.name}
-- Wallet: ${agent.wallet.address}
+- Owner: ${agent.ownerAddress}
 - Channel: ${agent.channel}
 
 `
   return agentContext + sdkPrompt
 }
 
-export function createAgentTool(agent: Agent) {
-  if (!agent.wallet) throw new Error("Agent wallet required")
-
+export function createAgentTool(agent: Agent, userAddress: string, permissionsContext: string) {
   const exportData = buildAgentExport(agent)
   const primaryContract = agent.contracts[0]
   const chainId = primaryContract?.chainId || DEFAULT_CHAIN_ID
@@ -107,15 +83,32 @@ export function createAgentTool(agent: Agent) {
     export: exportData,
     agentId: agent.id,
     signAndSend: async (tx) => {
-      const result = await executeDirectly({
-        walletId: agent.wallet!.privyWalletId,
+      const contract = agent.contracts.find(
+        (c) => c.address.toLowerCase() === tx.to.toLowerCase()
+      )
+
+      if (!contract) {
+        throw new Error(`Contract ${tx.to} not found in agent`)
+      }
+
+      const result = await executeViaCRE({
+        userAddress,
+        agentId: agent.agentIdBytes!,
         chainId,
-        to: tx.to,
-        data: tx.data,
-        value: tx.value,
+        targetContract: tx.to,
+        functionAbi: contract.abi,
+        functionName: "execute",
+        args: [],
+        value: tx.value?.toString() || "0",
+        permissionsContext,
+        simulateOnly: false,
       })
 
-      return result.hash
+      if (!result.success || result.mode !== "execution") {
+        throw new Error(result.error?.toString() || "Execution failed")
+      }
+
+      return result.txHash || ""
     },
   })
 
@@ -135,6 +128,7 @@ function getClient(contract: AgentContract) {
 
 export async function simulate(
   agent: Agent,
+  userAddress: string,
   params: ExecuteParams
 ): Promise<SimulateResult> {
   const contract = findContract(agent, params.contractAddress)
@@ -147,40 +141,33 @@ export async function simulate(
     return { success: false, error: `Function ${params.functionName} not found` }
   }
 
+  const delegation = await getDelegation(userAddress, contract.chainId)
+  if (!delegation) {
+    return { success: false, error: "No delegation found. Please set up your account first." }
+  }
+
   try {
-    const client = getClient(contract)
     const argsArray = Object.values(params.args)
 
-    const callData = encodeFunctionData({
-      abi: [fn],
+    const result = await simulateViaCRE({
+      userAddress,
+      agentId: agent.agentIdBytes!,
+      chainId: contract.chainId,
+      targetContract: params.contractAddress,
+      functionAbi: [fn] as Abi,
       functionName: params.functionName,
       args: argsArray,
-    })
-
-    const value = params.value ? parseEther(params.value) : BigInt(0)
-
-    if (fn.stateMutability === "view" || fn.stateMutability === "pure") {
-      const result = await client.call({
-        to: params.contractAddress as `0x${string}`,
-        data: callData,
-      })
-      return {
-        success: true,
-        returnData: result.data,
-      }
-    }
-
-    if (!agent.wallet) throw new Error("Agent wallet required for gas estimation")
-    const gasEstimate = await client.estimateGas({
-      account: agent.wallet.address as `0x${string}`,
-      to: params.contractAddress as `0x${string}`,
-      data: callData,
-      value,
+      value: params.value || "0",
+      permissionsContext: delegation.signedDelegation,
     })
 
     return {
-      success: true,
-      gasEstimate: gasEstimate.toString(),
+      success: result.success,
+      gasEstimate: result.gasEstimate,
+      returnData: result.returnData,
+      nullifier: result.nullifier,
+      policySatisfied: result.policySatisfied === "0x0000000000000000000000000000000000000000000000000000000000000001",
+      error: result.error?.recommendation || result.error?.decoded,
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Simulation failed"
@@ -188,11 +175,9 @@ export async function simulate(
   }
 }
 
-/**
- * Execute a contract call via the AutonomifyExecutor.
- */
 export async function execute(
   agent: Agent,
+  userAddress: string,
   params: ExecuteParams
 ): Promise<ExecuteResult> {
   const contract = findContract(agent, params.contractAddress)
@@ -205,29 +190,40 @@ export async function execute(
     return { success: false, error: `Function ${params.functionName} not found` }
   }
 
-  try {
-    if (!agent.wallet) throw new Error("Agent wallet required for execution")
+  const delegation = await getDelegation(userAddress, contract.chainId)
+  if (!delegation) {
+    return { success: false, error: "No delegation found. Please set up your account first." }
+  }
 
-    const value = params.value ? parseEther(params.value) : undefined
+  try {
     const argsArray = Object.values(params.args)
 
-    const result = await executeViaExecutor({
-      walletId: agent.wallet.privyWalletId,
-      agentId: agent.id,
+    const result = await executeViaCRE({
+      userAddress,
+      agentId: agent.agentIdBytes!,
       chainId: contract.chainId,
       targetContract: params.contractAddress,
       functionAbi: [fn] as Abi,
       functionName: params.functionName,
       args: argsArray,
-      value,
+      value: params.value || "0",
+      permissionsContext: delegation.signedDelegation,
+      simulateOnly: false,
     })
 
-    const explorerUrl = getExplorerUrl(contract.chainId, result.hash)
+    if (result.mode !== "execution") {
+      return { success: false, error: "Unexpected simulation result" }
+    }
+
+    const explorerUrl = result.txHash ? getExplorerUrl(contract.chainId, result.txHash) : null
 
     return {
       success: result.success,
-      txHash: result.hash,
+      txHash: result.txHash,
       explorerUrl: explorerUrl || undefined,
+      nullifier: result.nullifier,
+      gasUsed: result.gasAnalysis?.total,
+      error: result.error?.recommendation || result.error?.errorName,
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Execution failed"

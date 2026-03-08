@@ -1,8 +1,9 @@
 /**
  * ABI Fetcher
  *
- * Fetches verified contract ABIs from block explorer APIs.
- * Supports multiple explorer types (Etherscan, Blockscout).
+ * Fetches verified contract ABIs from multiple sources:
+ * 1. Tenderly RPC (tenderly_getContractAbi) - preferred, no API key needed
+ * 2. Block explorer APIs (Etherscan, Blockscout) - fallback
  *
  * Uses the chain's explorer configuration from the SDK.
  * API keys are resolved from environment variables per-chain.
@@ -25,6 +26,28 @@ interface ExplorerResponse {
 interface FetchAbiResult {
   abi: Abi
   source: string
+}
+
+// Tenderly ABI format (slightly different from standard)
+interface TenderlyAbiItem {
+  type: string
+  name: string
+  constant: boolean
+  anonymous: boolean
+  stateMutability: string
+  inputs: TenderlyAbiInput[] | null
+  outputs: TenderlyAbiOutput[] | null
+}
+
+interface TenderlyAbiInput {
+  name: string
+  type: string
+  indexed?: boolean
+}
+
+interface TenderlyAbiOutput {
+  name: string
+  type: string
 }
 
 // =============================================================================
@@ -123,6 +146,100 @@ async function fetchFromBlockscout(
 }
 
 // =============================================================================
+// TENDERLY RPC FETCHER
+// =============================================================================
+
+// Tenderly RPC URLs by chain ID
+const TENDERLY_RPC_URLS: Record<number, string> = {
+  84532: process.env.TENDERLY_BASE_SEPOLIA_RPC || "",
+  // Add more chains as needed
+}
+
+/**
+ * Convert Tenderly ABI format to standard ABI format
+ */
+function normalizeTenderlyAbi(tenderlyAbi: TenderlyAbiItem[]): Abi {
+  return tenderlyAbi.map((item) => {
+    if (item.type === "function") {
+      return {
+        type: "function" as const,
+        name: item.name,
+        inputs: (item.inputs || []).map((i) => ({ name: i.name, type: i.type })),
+        outputs: (item.outputs || []).map((o) => ({ name: o.name, type: o.type })),
+        stateMutability: (item.stateMutability || "nonpayable") as "pure" | "view" | "nonpayable" | "payable",
+      }
+    }
+    if (item.type === "event") {
+      return {
+        type: "event" as const,
+        name: item.name,
+        inputs: (item.inputs || []).map((i) => ({
+          name: i.name,
+          type: i.type,
+          indexed: i.indexed || false,
+        })),
+      }
+    }
+    if (item.type === "constructor") {
+      return {
+        type: "constructor" as const,
+        inputs: (item.inputs || []).map((i) => ({ name: i.name, type: i.type })),
+        stateMutability: (item.stateMutability || "nonpayable") as "nonpayable" | "payable",
+      }
+    }
+    if (item.type === "fallback") {
+      return { type: "fallback" as const }
+    }
+    if (item.type === "receive") {
+      return { type: "receive" as const, stateMutability: "payable" as const }
+    }
+    // Skip unknown types
+    return null
+  }).filter(Boolean) as Abi
+}
+
+/**
+ * Fetch ABI from Tenderly RPC using tenderly_getContractAbi method
+ */
+async function fetchFromTenderly(
+  chainId: number,
+  address: string
+): Promise<FetchAbiResult | null> {
+  const rpcUrl = TENDERLY_RPC_URLS[chainId]
+  if (!rpcUrl) {
+    return null // Tenderly not configured for this chain
+  }
+
+  try {
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "tenderly_getContractAbi",
+        params: [address],
+        id: 1,
+      }),
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const data = await response.json()
+
+    if (data.error || !data.result) {
+      return null
+    }
+
+    const abi = normalizeTenderlyAbi(data.result)
+    return { abi, source: "Tenderly" }
+  } catch {
+    return null
+  }
+}
+
+// =============================================================================
 // MAIN FETCHER
 // =============================================================================
 
@@ -133,11 +250,11 @@ const FETCHERS: Record<ExplorerType, typeof fetchFromEtherscan> = {
 
 /**
  * Fetch ABI for a contract.
- * Automatically uses the correct explorer for the chain.
+ * Tries Tenderly first (no API key needed), then falls back to block explorer.
  *
  * @param chainId - Chain ID
  * @param address - Contract address
- * @returns { abi, source } - The ABI and which explorer it came from
+ * @returns { abi, source } - The ABI and which source it came from
  *
  * @throws Error if chain unknown, API key missing, or contract not verified
  */
@@ -146,6 +263,16 @@ export async function fetchAbi(
   address: string
 ): Promise<FetchAbiResult> {
   const chain = getChainOrThrow(chainId)
+
+  // Try Tenderly first (faster, no API key needed)
+  const tenderlyResult = await fetchFromTenderly(chainId, address)
+  if (tenderlyResult) {
+    console.log(`[fetchAbi] Got ABI from Tenderly for ${address}`)
+    return tenderlyResult
+  }
+
+  // Fall back to block explorer
+  console.log(`[fetchAbi] Tenderly unavailable, falling back to ${chain.explorer.name}`)
   const apiKey = getExplorerApiKey(chainId)
 
   const fetcher = FETCHERS[chain.explorer.type]

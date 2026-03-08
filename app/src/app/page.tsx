@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { FunctionList } from "@/components/function-list"
 import type { FunctionExport } from "autonomify-sdk"
 import { useWallet } from "@/lib/wallet"
 import { useNetwork, NetworkToggle, ChainSelector } from "@/contexts/network-context"
+import { AccountSetup, SmartAccountCard } from "@/components/account-setup"
 
 interface ContractAnalysis {
   summary: string
@@ -111,7 +112,6 @@ function MagicUnderline() {
 function GridPattern() {
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-      {/* Gradient grid overlay */}
       <svg
         className="absolute inset-0 w-full h-full"
         xmlns="http://www.w3.org/2000/svg"
@@ -143,7 +143,6 @@ function GridPattern() {
         <rect width="100%" height="100%" fill="url(#gridPattern)" mask="url(#gridMask)" />
       </svg>
 
-      {/* Floating spinning cubes - larger and more visible */}
       <SpinningCube className="absolute top-24 left-12 w-8 h-8 rotate-45" delay={0} color="bg-amber-500/30" variant={1} />
       <SpinningCube className="absolute top-44 right-24 w-6 h-6 rotate-12" delay={3} color="bg-blue-500/35" variant={2} />
       <SpinningCube className="absolute top-72 left-1/4 w-10 h-10 rotate-45" delay={6} color="bg-purple-500/25" variant={1} />
@@ -174,8 +173,10 @@ function LoadingAnimation({ word }: { word: string }) {
 }
 
 export default function Home() {
-  const { address: walletAddress, isConnected, isConnecting, connect, disconnect } = useWallet()
+  const { address: walletAddress, isConnected, isConnecting, isSmartAccountLoading, connect, disconnect } = useWallet()
   const [showConnectPrompt, setShowConnectPrompt] = useState(false)
+  const [accountReady, setAccountReady] = useState(false)
+  const [showAccountSetup, setShowAccountSetup] = useState(false)
 
   const [contract, setContract] = useState<ContractData | null>(null)
   const [agents, setAgents] = useState<AgentData[]>([])
@@ -195,6 +196,7 @@ export default function Home() {
     agentId: string
     agentName: string
     agentIdBytes: string
+    smartAccountAddress: string
   } | null>(null)
 
   const [address, setAddress] = useState("")
@@ -224,12 +226,40 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [loading])
 
+  // Check account status when connected
+  const checkAccountStatus = useCallback(async () => {
+    if (!walletAddress) return
+
+    try {
+      const res = await fetch("/api/delegation", {
+        headers: { "x-user-address": walletAddress },
+      })
+      const json = await res.json()
+
+      if (json.ok && json.data.hasDelegation) {
+        setAccountReady(true)
+        setShowAccountSetup(false)
+      } else {
+        setAccountReady(false)
+        setShowAccountSetup(true)
+      }
+    } catch {
+      setAccountReady(false)
+    }
+  }, [walletAddress])
+
   useEffect(() => {
     if (!isConnected || !walletAddress) {
       setAgents([])
+      setAccountReady(false)
+      setShowAccountSetup(false)
       return
     }
 
+    // Check account status
+    checkAccountStatus()
+
+    // Fetch agents
     fetch("/api/agents", {
       headers: { "x-owner-address": walletAddress },
     })
@@ -238,7 +268,7 @@ export default function Home() {
         if (json.ok) setAgents(json.data)
       })
       .catch(() => {})
-  }, [isConnected, walletAddress])
+  }, [isConnected, walletAddress, checkAccountStatus])
 
   async function handleAutonomify() {
     if (!isConnected) {
@@ -310,7 +340,7 @@ export default function Home() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image
-              src="/autonomify_icon.png"
+              src="/logo-icon.png"
               alt="Autonomify"
               width={70}
               height={70}
@@ -335,20 +365,42 @@ export default function Home() {
               </button>
             )}
             {isConnected ? (
-              <button
-                onClick={() => disconnect()}
-                className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 rounded-full px-4 py-2 transition-colors"
-              >
-                <div className="w-2 h-2 bg-green-500 rounded-full" />
-                <span className="text-sm font-mono">{walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {isSmartAccountLoading ? (
+                  <div className="flex items-center gap-2 bg-zinc-800 rounded-full px-4 py-2">
+                    <div className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm text-zinc-400">Creating wallet...</span>
+                  </div>
+                ) : (
+                  <>
+                    {!accountReady && (
+                      <button
+                        onClick={() => setShowAccountSetup(true)}
+                        className="flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 rounded-full px-3 py-2 transition-colors text-sm"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Setup Required
+                      </button>
+                    )}
+                    <button
+                      onClick={() => disconnect()}
+                      className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 rounded-full px-4 py-2 transition-colors"
+                    >
+                      <div className={`w-2 h-2 ${accountReady ? 'bg-green-500' : 'bg-amber-500'} rounded-full`} />
+                      <span className="text-sm font-mono">{walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</span>
+                    </button>
+                  </>
+                )}
+              </div>
             ) : (
               <button
                 onClick={() => connect()}
                 disabled={isConnecting}
-                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-zinc-900 font-medium rounded-full px-4 py-2 transition-colors"
+                className="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-zinc-900 font-medium rounded-full px-4 py-2 transition-colors w-[140px]"
               >
-                {isConnecting ? "Connecting..." : "Connect Wallet"}
+                {isConnecting ? "Signing in..." : "Sign In"}
               </button>
             )}
           </div>
@@ -357,7 +409,6 @@ export default function Home() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 pt-24 pb-20 relative z-10">
-        {/* Hero Section with Scale Animation */}
         <div 
           className="flex flex-col items-center justify-center transition-transform duration-300 ease-out"
           style={{ 
@@ -367,9 +418,9 @@ export default function Home() {
         >
           <div className="text-center mb-16 max-w-4xl">
             <p className="text-zinc-300 text-4xl md:text-5xl leading-tight">
-              Turn any <span className="gradient-text">verified contract</span> into a{" "}
+              Turn any <span className="gradient-text">verified contract</span> into an{" "}
               <span className="relative inline-block">
-                Telegram agent
+                AI agent
                 <MagicUnderline />
               </span>
               {" "}and <span className="text-zinc-500">more..</span>
@@ -481,7 +532,6 @@ export default function Home() {
             <div className="bg-zinc-900/50 backdrop-blur rounded-2xl p-6 border border-zinc-800 mb-6">
               <h2 className="text-lg font-medium mb-4">Launch Agent</h2>
               <div className="grid grid-cols-3 gap-4">
-                {/* Telegram */}
                 <button
                   onClick={() => setShowLaunchModal(true)}
                   className="flex flex-col items-center justify-center gap-2 bg-[#0088cc] hover:bg-[#0099dd] text-white font-medium py-5 px-4 rounded-xl transition-colors"
@@ -492,7 +542,6 @@ export default function Home() {
                   <span className="text-sm">Telegram</span>
                 </button>
 
-                {/* Discord - Coming Soon */}
                 <button
                   disabled
                   className="flex flex-col items-center justify-center gap-2 bg-zinc-800 text-zinc-500 font-medium py-5 px-4 rounded-xl cursor-not-allowed relative overflow-hidden"
@@ -504,7 +553,6 @@ export default function Home() {
                   <span className="absolute top-1 right-1 text-[10px] bg-zinc-700 px-1.5 py-0.5 rounded-full">Soon</span>
                 </button>
 
-                {/* Self-Hosted SDK */}
                 <button
                   onClick={() => setShowLaunchModal(true)}
                   className="flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-zinc-900 font-medium py-5 px-4 rounded-xl transition-colors"
@@ -541,7 +589,7 @@ export default function Home() {
             <span className="text-white font-medium">{totalContracts}</span> contracts
           </div>
           <div className="text-zinc-500">
-            BSC Testnet
+            Base Sepolia
           </div>
         </div>
       </footer>
@@ -553,7 +601,7 @@ export default function Home() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold">Your Agents</h2>
+              <h2 className="text-lg font-semibold">Your Account</h2>
               <button
                 onClick={() => setShowAgentPanel(false)}
                 className="text-zinc-500 hover:text-white"
@@ -561,6 +609,14 @@ export default function Home() {
                 ✕
               </button>
             </div>
+
+            {walletAddress && (
+              <div className="mb-6">
+                <SmartAccountCard address={walletAddress} />
+              </div>
+            )}
+
+            <h3 className="text-sm font-medium text-zinc-400 mb-3">Your Agents</h3>
             <div className="space-y-3">
               {agents.map((agent) => (
                 <div
@@ -604,6 +660,7 @@ export default function Home() {
                 agentId: selectedAgentDetail.id,
                 agentName: selectedAgentDetail.name,
                 agentIdBytes: selectedAgentDetail.agentIdBytes,
+                smartAccountAddress: walletAddress || "",
               })
             }
             setSelectedAgentDetail(null)
@@ -644,6 +701,7 @@ export default function Home() {
                 agentId: agent.id,
                 agentName: agent.name,
                 agentIdBytes: agent.agentIdBytes,
+                smartAccountAddress: walletAddress || "",
               })
             }
           }}
@@ -669,6 +727,7 @@ export default function Home() {
           agentId={showSelfHostedModal.agentId}
           agentName={showSelfHostedModal.agentName}
           agentIdBytes={showSelfHostedModal.agentIdBytes}
+          smartAccountAddress={showSelfHostedModal.smartAccountAddress}
           onClose={() => setShowSelfHostedModal(null)}
         />
       )}
@@ -682,6 +741,19 @@ export default function Home() {
           onClose={() => setShowConnectPrompt(false)}
           isConnecting={isConnecting}
         />
+      )}
+
+      {showAccountSetup && isConnected && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-md">
+            <AccountSetup
+              onReady={() => {
+                setAccountReady(true)
+                setShowAccountSetup(false)
+              }}
+            />
+          </div>
+        </div>
       )}
     </main>
   )
@@ -738,6 +810,12 @@ function LaunchModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Policy config state
+  const [maxTxAmount, setMaxTxAmount] = useState("0.1")
+  const [enableTimeWindow, setEnableTimeWindow] = useState(false)
+  const [startHour, setStartHour] = useState(9)
+  const [endHour, setEndHour] = useState(17)
+
   const compatibleAgents = agents.filter((a) => a.type === agentType)
 
   function handleSelectType(type: AgentType) {
@@ -790,10 +868,17 @@ function LaunchModal({
           return
         }
 
-        const body: Record<string, string> = {
+        const body: Record<string, unknown> = {
           name: name.trim(),
           type: agentType,
           ownerAddress,
+          policy: {
+            maxTxAmount: maxTxAmount,
+            enableTimeWindow: enableTimeWindow,
+            startHour: enableTimeWindow ? startHour : 0,
+            endHour: enableTimeWindow ? endHour : 24,
+            whitelistedContract: contract.address,
+          },
         }
         if (agentType === "telegram") {
           body.telegramBotToken = token.trim()
@@ -863,7 +948,6 @@ function LaunchModal({
 
         {step === "type" ? (
           <div className="space-y-3">
-            {/* Telegram Option */}
             <button
               onClick={() => handleSelectType("telegram")}
               className="w-full flex items-center gap-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl p-4 transition-colors text-left"
@@ -880,7 +964,6 @@ function LaunchModal({
               <span className="text-zinc-500">→</span>
             </button>
 
-            {/* Discord Option - Coming Soon */}
             <button
               disabled
               className="w-full flex items-center gap-4 bg-zinc-800/50 rounded-xl p-4 text-left cursor-not-allowed relative overflow-hidden"
@@ -897,7 +980,6 @@ function LaunchModal({
               <span className="text-xs bg-zinc-700 text-zinc-400 px-2 py-1 rounded-full">Soon</span>
             </button>
 
-            {/* Self-Hosted SDK */}
             <button
               onClick={() => handleSelectType("self_hosted")}
               className="w-full flex items-center gap-4 bg-zinc-800 hover:bg-zinc-700 rounded-xl p-4 transition-colors text-left"
@@ -1010,6 +1092,73 @@ function LaunchModal({
                     </div>
                   </div>
                 )}
+
+                {/* Policy Configuration */}
+                <div className="pt-4 border-t border-zinc-800 space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                    <span className="text-sm font-medium text-zinc-300">Policy Limits</span>
+                  </div>
+
+                  {/* Whitelisted Contract (auto-filled) */}
+                  <div className="bg-zinc-800/50 rounded-lg p-3">
+                    <div className="text-xs text-zinc-500 mb-1">Whitelisted Contract</div>
+                    <code className="text-xs text-green-400">{contract.address}</code>
+                  </div>
+
+                  {/* Max Transaction Amount */}
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">Max per transaction (ETH)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={maxTxAmount}
+                      onChange={(e) => setMaxTxAmount(e.target.value)}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  {/* Time Window (optional) */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <input
+                        type="checkbox"
+                        id="enableTimeWindow"
+                        checked={enableTimeWindow}
+                        onChange={(e) => setEnableTimeWindow(e.target.checked)}
+                        className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-green-500 focus:ring-green-500"
+                      />
+                      <label htmlFor="enableTimeWindow" className="text-xs text-zinc-400">
+                        Restrict to operating hours
+                      </label>
+                    </div>
+                    {enableTimeWindow && (
+                      <div className="flex items-center gap-2 pl-6">
+                        <input
+                          type="number"
+                          min="0"
+                          max="23"
+                          value={startHour}
+                          onChange={(e) => setStartHour(parseInt(e.target.value) || 0)}
+                          className="w-16 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-white text-sm text-center"
+                        />
+                        <span className="text-xs text-zinc-500">to</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="23"
+                          value={endHour}
+                          onChange={(e) => setEndHour(parseInt(e.target.value) || 0)}
+                          className="w-16 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-white text-sm text-center"
+                        />
+                        <span className="text-xs text-zinc-500">UTC</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </>
             )}
 
@@ -1133,12 +1282,12 @@ function LaunchedModal({
             </div>
 
             <a
-              href="https://www.bnbchain.org/en/testnet-faucet"
+              href="https://faucets.chain.link/base-sepolia"
               target="_blank"
               rel="noopener noreferrer"
-              className="block text-center bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 py-3 rounded-xl transition-colors mb-3"
+              className="block text-center bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 py-3 rounded-xl transition-colors mb-3"
             >
-              Fund with testnet BNB
+              Get testnet ETH &amp; LINK (Chainlink Faucet)
             </a>
           </>
         )}
@@ -1154,6 +1303,16 @@ function LaunchedModal({
   )
 }
 
+interface PolicyData {
+  maxTxAmount: string
+  enableTimeWindow: boolean
+  startHour: number
+  endHour: number
+  whitelistedContracts: { address: string; name: string | null }[]
+  syncStatus: string
+  lastSyncedAt: number | null
+}
+
 function AgentDetailModal({
   agent,
   onClose,
@@ -1164,6 +1323,37 @@ function AgentDetailModal({
   onOpenSetup: () => void
 }) {
   const [copied, setCopied] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<"details" | "policy">("details")
+  const [policy, setPolicy] = useState<PolicyData | null>(null)
+  const [loadingPolicy, setLoadingPolicy] = useState(false)
+  const [editingPolicy, setEditingPolicy] = useState(false)
+  const [savingPolicy, setSavingPolicy] = useState(false)
+  const [editForm, setEditForm] = useState({
+    maxTxAmount: "",
+    enableTimeWindow: false,
+    startHour: 9,
+    endHour: 17,
+  })
+
+  useEffect(() => {
+    if (activeTab === "policy" && !policy && !loadingPolicy) {
+      setLoadingPolicy(true)
+      fetch(`/api/agents/${agent.id}/policy`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.ok && json.data) {
+            setPolicy(json.data)
+            setEditForm({
+              maxTxAmount: json.data.maxTxAmount,
+              enableTimeWindow: json.data.enableTimeWindow,
+              startHour: json.data.startHour,
+              endHour: json.data.endHour,
+            })
+          }
+        })
+        .finally(() => setLoadingPolicy(false))
+    }
+  }, [activeTab, agent.id, policy, loadingPolicy])
 
   function copy(text: string, label: string) {
     navigator.clipboard.writeText(text)
@@ -1171,10 +1361,28 @@ function AgentDetailModal({
     setTimeout(() => setCopied(null), 2000)
   }
 
+  async function savePolicy() {
+    setSavingPolicy(true)
+    try {
+      const res = await fetch(`/api/agents/${agent.id}/policy`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm),
+      })
+      const json = await res.json()
+      if (json.ok) {
+        setPolicy(json.data)
+        setEditingPolicy(false)
+      }
+    } finally {
+      setSavingPolicy(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 w-full max-w-md">
-        <div className="flex items-center justify-between mb-6">
+      <div className="bg-zinc-900 rounded-2xl p-6 border border-zinc-800 w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 bg-green-500 rounded-full" />
             <h2 className="text-xl font-semibold">{agent.name}</h2>
@@ -1185,71 +1393,229 @@ function AgentDetailModal({
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-zinc-800 rounded-xl p-4">
-            <div className="text-xs text-zinc-500 mb-1">Contracts</div>
-            <div className="text-white font-medium">{agent.contractCount} contract{agent.contractCount !== 1 ? "s" : ""}</div>
-          </div>
-
-          {agent.walletAddress && (
-            <div className="bg-zinc-800 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-zinc-500 mb-1">Wallet Address</div>
-                  <code className="text-sm text-blue-400 break-all">{agent.walletAddress}</code>
-                </div>
-                <button
-                  onClick={() => copy(agent.walletAddress!, "address")}
-                  className="text-zinc-500 hover:text-white text-sm ml-2 shrink-0"
-                >
-                  {copied === "address" ? "Copied!" : "Copy"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {agent.agentIdBytes && (
-            <div className="bg-zinc-800 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-zinc-500 mb-1">Agent ID (bytes32)</div>
-                  <code className="text-xs text-amber-400 break-all">{agent.agentIdBytes}</code>
-                </div>
-                <button
-                  onClick={() => copy(agent.agentIdBytes!, "agentId")}
-                  className="text-zinc-500 hover:text-white text-sm ml-2 shrink-0"
-                >
-                  {copied === "agentId" ? "Copied!" : "Copy"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {agent.type === "self_hosted" && (
-            <button
-              onClick={onOpenSetup}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-zinc-900 font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="m18 16 4-4-4-4" />
-                <path d="m6 8-4 4 4 4" />
-                <path d="m14.5 4-5 16" />
-              </svg>
-              View Setup Instructions
-            </button>
-          )}
-
-          {agent.type === "telegram" && agent.walletAddress && (
-            <a
-              href="https://www.bnbchain.org/en/testnet-faucet"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-center bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-400 py-3 rounded-xl transition-colors"
-            >
-              Fund with testnet BNB
-            </a>
-          )}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setActiveTab("details")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "details"
+                ? "bg-amber-500 text-zinc-900"
+                : "bg-zinc-800 text-zinc-400 hover:text-white"
+            }`}
+          >
+            Details
+          </button>
+          <button
+            onClick={() => setActiveTab("policy")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "policy"
+                ? "bg-amber-500 text-zinc-900"
+                : "bg-zinc-800 text-zinc-400 hover:text-white"
+            }`}
+          >
+            Policy
+          </button>
         </div>
+
+        {activeTab === "details" && (
+          <div className="space-y-4">
+            <div className="bg-zinc-800 rounded-xl p-4">
+              <div className="text-xs text-zinc-500 mb-1">Contracts</div>
+              <div className="text-white font-medium">{agent.contractCount} contract{agent.contractCount !== 1 ? "s" : ""}</div>
+            </div>
+
+            {agent.walletAddress && (
+              <div className="bg-zinc-800 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-zinc-500 mb-1">Wallet Address</div>
+                    <code className="text-sm text-blue-400 break-all">{agent.walletAddress}</code>
+                  </div>
+                  <button
+                    onClick={() => copy(agent.walletAddress!, "address")}
+                    className="text-zinc-500 hover:text-white text-sm ml-2 shrink-0"
+                  >
+                    {copied === "address" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {agent.agentIdBytes && (
+              <div className="bg-zinc-800 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-zinc-500 mb-1">Agent ID (bytes32)</div>
+                    <code className="text-xs text-amber-400 break-all">{agent.agentIdBytes}</code>
+                  </div>
+                  <button
+                    onClick={() => copy(agent.agentIdBytes!, "agentId")}
+                    className="text-zinc-500 hover:text-white text-sm ml-2 shrink-0"
+                  >
+                    {copied === "agentId" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {agent.type === "self_hosted" && (
+              <button
+                onClick={onOpenSetup}
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-zinc-900 font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m18 16 4-4-4-4" />
+                  <path d="m6 8-4 4 4 4" />
+                  <path d="m14.5 4-5 16" />
+                </svg>
+                View Setup Instructions
+              </button>
+            )}
+
+            {agent.walletAddress && (
+              <a
+                href="https://faucets.chain.link/base-sepolia"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 py-3 rounded-xl transition-colors"
+              >
+                Get testnet ETH &amp; LINK (Chainlink Faucet)
+              </a>
+            )}
+          </div>
+        )}
+
+        {activeTab === "policy" && (
+          <div className="space-y-4">
+            {loadingPolicy ? (
+              <div className="text-center py-8 text-zinc-500">Loading policy...</div>
+            ) : !policy ? (
+              <div className="text-center py-8 text-zinc-500">No policy configured</div>
+            ) : editingPolicy ? (
+              <>
+                <div className="bg-zinc-800 rounded-xl p-4">
+                  <label className="text-xs text-zinc-500 block mb-2">Max Transaction Amount (ETH)</label>
+                  <input
+                    type="text"
+                    value={editForm.maxTxAmount}
+                    onChange={(e) => setEditForm({ ...editForm, maxTxAmount: e.target.value })}
+                    className="w-full bg-zinc-700 rounded-lg px-3 py-2 text-white"
+                  />
+                </div>
+
+                <div className="bg-zinc-800 rounded-xl p-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editForm.enableTimeWindow}
+                      onChange={(e) => setEditForm({ ...editForm, enableTimeWindow: e.target.checked })}
+                      className="w-5 h-5 rounded border-zinc-600 bg-zinc-700 text-amber-500 focus:ring-amber-500"
+                    />
+                    <span className="text-white">Enable Time Window</span>
+                  </label>
+
+                  {editForm.enableTimeWindow && (
+                    <div className="mt-3 flex gap-4">
+                      <div className="flex-1">
+                        <label className="text-xs text-zinc-500 block mb-1">Start Hour (UTC)</label>
+                        <select
+                          value={editForm.startHour}
+                          onChange={(e) => setEditForm({ ...editForm, startHour: Number(e.target.value) })}
+                          className="w-full bg-zinc-700 rounded-lg px-3 py-2 text-white"
+                        >
+                          {Array.from({ length: 24 }, (_, i) => (
+                            <option key={i} value={i}>{i.toString().padStart(2, "0")}:00</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-xs text-zinc-500 block mb-1">End Hour (UTC)</label>
+                        <select
+                          value={editForm.endHour}
+                          onChange={(e) => setEditForm({ ...editForm, endHour: Number(e.target.value) })}
+                          className="w-full bg-zinc-700 rounded-lg px-3 py-2 text-white"
+                        >
+                          {Array.from({ length: 24 }, (_, i) => (
+                            <option key={i} value={i}>{i.toString().padStart(2, "0")}:00</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setEditingPolicy(false)}
+                    className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={savePolicy}
+                    disabled={savingPolicy}
+                    className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-zinc-900 font-semibold py-3 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {savingPolicy ? "Saving..." : "Save Policy"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-zinc-800 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs text-zinc-500">Sync Status</div>
+                    <div className={`text-xs px-2 py-1 rounded ${
+                      policy.syncStatus === "synced" ? "bg-green-500/20 text-green-400" :
+                      policy.syncStatus === "pending" ? "bg-yellow-500/20 text-yellow-400" :
+                      "bg-red-500/20 text-red-400"
+                    }`}>
+                      {policy.syncStatus}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-800 rounded-xl p-4">
+                  <div className="text-xs text-zinc-500 mb-1">Max Transaction Amount</div>
+                  <div className="text-white font-medium">{policy.maxTxAmount} ETH</div>
+                </div>
+
+                <div className="bg-zinc-800 rounded-xl p-4">
+                  <div className="text-xs text-zinc-500 mb-1">Time Window</div>
+                  <div className="text-white font-medium">
+                    {policy.enableTimeWindow
+                      ? `${policy.startHour.toString().padStart(2, "0")}:00 - ${policy.endHour.toString().padStart(2, "0")}:00 UTC`
+                      : "Disabled (24/7)"}
+                  </div>
+                </div>
+
+                {policy.whitelistedContracts.length > 0 && (
+                  <div className="bg-zinc-800 rounded-xl p-4">
+                    <div className="text-xs text-zinc-500 mb-2">Whitelisted Contracts</div>
+                    <div className="space-y-2">
+                      {policy.whitelistedContracts.map((c) => (
+                        <div key={c.address} className="text-sm">
+                          <div className="text-zinc-400">{c.name || "Unknown"}</div>
+                          <code className="text-xs text-blue-400 break-all">{c.address}</code>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setEditingPolicy(true)}
+                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                  Edit Policy
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1259,19 +1625,52 @@ function SelfHostedSetupModal({
   agentId,
   agentName,
   agentIdBytes,
+  smartAccountAddress,
   onClose,
 }: {
   agentId: string
   agentName: string
   agentIdBytes: string
+  smartAccountAddress: string
   onClose: () => void
 }) {
-  const [activeTab, setActiveTab] = useState<"cli" | "manual">("cli")
-  const [manualFramework, setManualFramework] = useState<"vercel" | "openai">("vercel")
+  const [activeTab, setActiveTab] = useState<"cre" | "sdk">("cre")
+  const [sdkFramework, setSdkFramework] = useState<"vercel" | "openai">("vercel")
   const [copied, setCopied] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [policy, setPolicy] = useState<PolicyData | null>(null)
+  const [signedDelegation, setSignedDelegation] = useState<string | null>(null)
+  const [loadingPolicy, setLoadingPolicy] = useState(true)
 
   const apiUrl = typeof window !== "undefined" ? `${window.location.origin}/api/agents/${agentId}/export` : ""
+
+  // Fetch policy and delegation on mount
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Fetch policy
+        const policyRes = await fetch(`/api/agents/${agentId}/policy`)
+        const policyJson = await policyRes.json()
+        if (policyJson.ok && policyJson.data) {
+          setPolicy(policyJson.data)
+        }
+
+        // Fetch delegation
+        const delegationRes = await fetch(`/api/delegation`, {
+          headers: { "x-user-address": smartAccountAddress },
+        })
+        const delegationJson = await delegationRes.json()
+        if (delegationJson.ok && delegationJson.data?.signedDelegation) {
+          setSignedDelegation(delegationJson.data.signedDelegation)
+        }
+      } catch {
+        // Silently fail
+      } finally {
+        setLoadingPolicy(false)
+      }
+    }
+    fetchData()
+  }, [agentId, smartAccountAddress])
 
   function copy(text: string, label: string) {
     navigator.clipboard.writeText(text)
@@ -1300,21 +1699,59 @@ function SelfHostedSetupModal({
     }
   }
 
-  const cliCommand = `npx create-autonomify --agent ${agentId}`
+  // Known ERC20 tokens we can generate test payloads for
+  const KNOWN_ERC20_TOKENS: Record<string, string> = {
+    "0xe4ab69c077896252fafbd49efd26b5d171a32410": "LINK",
+    "0x4200000000000000000000000000000000000006": "WETH",
+  }
+
+  const targetContract = policy?.whitelistedContracts[0]?.address || ""
+  const isKnownERC20 = targetContract.toLowerCase() in KNOWN_ERC20_TOKENS
+  const tokenName = isKnownERC20 ? KNOWN_ERC20_TOKENS[targetContract.toLowerCase()] : null
+
+  // Use 50% of max amount for test, capped at 0.1 ETH
+  const maxAmount = policy?.maxTxAmount ? parseFloat(policy.maxTxAmount) : 1
+  const testAmount = Math.min(maxAmount * 0.5, 0.1)
+  const testAmountWei = BigInt(Math.floor(testAmount * 1e18)).toString(16).padStart(64, "0")
+
+  // Check if current time is within policy window
+  const currentHour = new Date().getUTCHours()
+  const isOutsideTimeWindow = policy?.enableTimeWindow && (
+    policy.startHour <= policy.endHour
+      ? (currentHour < policy.startHour || currentHour >= policy.endHour)
+      : (currentHour < policy.startHour && currentHour >= policy.endHour)
+  )
+
+  // ERC20 transfer calldata: transfer(address to, uint256 amount)
+  const transferCalldata = `0xa9059cbb000000000000000000000000000000000000000000000000000000000000dead${testAmountWei}`
+
+  const creTestPayload = isKnownERC20 ? `curl -X POST http://localhost:8080/trigger \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "userAddress": "${smartAccountAddress}",
+    "agentId": "${agentIdBytes}",
+    "execution": {
+      "target": "${targetContract}",
+      "calldata": "${transferCalldata}",
+      "value": "0"
+    },
+    "permissionsContext": "${signedDelegation || "0x"}",
+    "simulateOnly": true
+  }'` : null
 
   const vercelCode = `import { createAutonomifyTool, buildSystemPrompt } from 'autonomify-sdk'
 import { generateText } from 'ai'
 import { openai } from '@ai-sdk/openai'
 import { createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { bscTestnet } from 'viem/chains'
+import { baseSepolia } from 'viem/chains'
 import config from './autonomify.json'
 
 // Setup your wallet
 const account = privateKeyToAccount(process.env.PRIVATE_KEY)
 const walletClient = createWalletClient({
   account,
-  chain: bscTestnet,
+  chain: baseSepolia,
   transport: http(),
 })
 
@@ -1339,7 +1776,7 @@ const { text } = await generateText({
   model: openai('gpt-4o'),
   system: buildSystemPrompt(config),
   tools: { autonomify_execute: autonomifyTool },
-  prompt: 'Transfer 100 USDT to 0x...',
+  prompt: 'Transfer 1 LINK to 0x...',
   maxSteps: 5,
 })`
 
@@ -1347,7 +1784,7 @@ const { text } = await generateText({
 import OpenAI from 'openai'
 import { createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { bscTestnet } from 'viem/chains'
+import { baseSepolia } from 'viem/chains'
 import config from './autonomify.json'
 
 const openai = new OpenAI()
@@ -1356,7 +1793,7 @@ const openai = new OpenAI()
 const account = privateKeyToAccount(process.env.PRIVATE_KEY)
 const walletClient = createWalletClient({
   account,
-  chain: bscTestnet,
+  chain: baseSepolia,
   transport: http(),
 })
 
@@ -1381,7 +1818,7 @@ const response = await openai.chat.completions.create({
   model: 'gpt-4o',
   messages: [
     { role: 'system', content: buildSystemPrompt(config) },
-    { role: 'user', content: 'Transfer 100 USDT to 0x...' },
+    { role: 'user', content: 'Transfer 1 LINK to 0x...' },
   ],
   tools,
 })
@@ -1395,7 +1832,6 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-zinc-900 rounded-2xl border border-zinc-800 w-full max-w-2xl max-h-[85vh] flex flex-col">
-        {/* Header */}
         <div className="p-6 border-b border-zinc-800">
           <div className="flex items-center justify-between">
             <div>
@@ -1410,12 +1846,11 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
             </button>
           </div>
 
-          {/* Setup Method Tabs */}
           <div className="flex gap-2 mt-4">
             <button
-              onClick={() => setActiveTab("cli")}
+              onClick={() => setActiveTab("cre")}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === "cli"
+                activeTab === "cre"
                   ? "bg-amber-500 text-zinc-900"
                   : "bg-zinc-800 text-zinc-400 hover:text-white"
               }`}
@@ -1424,12 +1859,12 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
                 <polyline points="4 17 10 11 4 5" />
                 <line x1="12" y1="19" x2="20" y2="19" />
               </svg>
-              Quick Start (CLI)
+              CRE Test
             </button>
             <button
-              onClick={() => setActiveTab("manual")}
+              onClick={() => setActiveTab("sdk")}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === "manual"
+                activeTab === "sdk"
                   ? "bg-amber-500 text-zinc-900"
                   : "bg-zinc-800 text-zinc-400 hover:text-white"
               }`}
@@ -1439,67 +1874,178 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
                 <path d="m6 8-4 4 4 4" />
                 <path d="m14.5 4-5 16" />
               </svg>
-              Manual Setup
+              SDK Setup
             </button>
           </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === "cli" ? (
+          {activeTab === "cre" ? (
             <div className="space-y-6">
-              {/* CLI Command - Hero */}
-              <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/40 rounded-xl p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center">
-                    <MagicWandIcon className="w-5 h-5 text-zinc-900" />
-                  </div>
-                  <div>
-                    <div className="text-white font-semibold">One Command Setup</div>
-                    <div className="text-sm text-zinc-400">Creates a ready-to-run project with your agent config</div>
-                  </div>
-                </div>
-                <div className="relative">
-                  <pre className="bg-zinc-900 rounded-lg p-4 text-amber-400 font-mono text-sm overflow-x-auto">
-                    {cliCommand}
-                  </pre>
-                  <button
-                    onClick={() => copy(cliCommand, "cli")}
-                    className="absolute top-2 right-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 px-3 py-1.5 rounded-lg text-xs font-medium"
-                  >
-                    {copied === "cli" ? "Copied!" : "Copy"}
-                  </button>
-                </div>
-              </div>
-
-              {/* What it does */}
-              <div className="space-y-3">
-                <div className="text-sm text-zinc-400 font-medium">What this does:</div>
-                <div className="grid gap-3">
-                  {[
-                    { icon: "📦", text: "Creates a new project folder" },
-                    { icon: "⬇️", text: "Downloads your agent configuration" },
-                    { icon: "🔧", text: "Sets up TypeScript + your chosen SDK" },
-                    { icon: "🔑", text: "Configures wallet signing boilerplate" },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-zinc-800/50 rounded-lg p-3">
-                      <span className="text-lg">{item.icon}</span>
-                      <span className="text-sm text-zinc-300">{item.text}</span>
+              {loadingPolicy ? (
+                <div className="text-center py-8 text-zinc-500">Loading policy...</div>
+              ) : !isKnownERC20 ? (
+                // Contract not supported for auto-generated test
+                <div className="space-y-6">
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-6 text-center">
+                    <div className="w-12 h-12 bg-zinc-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-6 h-6 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="text-white font-medium mb-2">Test Payload Not Available</div>
+                    <div className="text-sm text-zinc-400 mb-4">
+                      Auto-generated test payloads are only available for known ERC20 tokens (LINK, WETH).
+                      Your contract requires a custom calldata payload.
+                    </div>
+                    <div className="bg-zinc-900 rounded-lg p-3 text-left">
+                      <div className="text-xs text-zinc-500 mb-1">Whitelisted Contract</div>
+                      <code className="text-xs text-zinc-400 break-all">{targetContract || "None"}</code>
+                    </div>
+                  </div>
 
-              {/* Framework choice info */}
-              <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4">
-                <div className="text-sm text-zinc-400">
-                  The CLI will ask you to choose between <span className="text-white">Vercel AI SDK</span> or <span className="text-white">OpenAI SDK</span>. Both generate production-ready code.
+                  <div className="space-y-3">
+                    <div className="text-sm text-zinc-400 font-medium">Your agent parameters:</div>
+                    <div className="grid gap-2">
+                      <div className="bg-zinc-800/50 rounded-lg p-3">
+                        <div className="text-xs text-zinc-500">Smart Account</div>
+                        <code className="text-xs text-blue-400 break-all">{smartAccountAddress}</code>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded-lg p-3">
+                        <div className="text-xs text-zinc-500">Agent ID (bytes32)</div>
+                        <code className="text-xs text-amber-400 break-all">{agentIdBytes}</code>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-900/20 border border-amber-800/50 rounded-xl p-4">
+                    <div className="text-sm text-amber-400 font-medium mb-2">To test this agent:</div>
+                    <div className="text-xs text-zinc-400">
+                      Use the <span className="text-white">SDK Setup</span> tab to integrate with your AI framework,
+                      or construct a custom curl payload with the correct calldata for your contract&apos;s functions.
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  {/* Time window warning */}
+                  {isOutsideTimeWindow && (
+                    <div className="bg-red-900/30 border border-red-800 rounded-xl p-4">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-5 h-5 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                          <div className="text-sm text-red-400 font-medium">Outside Time Window</div>
+                          <div className="text-xs text-zinc-400 mt-1">
+                            Policy allows execution {policy?.startHour}:00 - {policy?.endHour}:00 UTC. Current time: {currentHour}:00 UTC.
+                            Test will fail ZK proof generation.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="bg-gradient-to-br from-blue-500/20 to-cyan-600/20 border border-blue-500/40 rounded-xl p-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="4 17 10 11 4 5" />
+                          <line x1="12" y1="19" x2="20" y2="19" />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-white font-semibold">Test CRE Workflow Locally</div>
+                        <div className="text-sm text-zinc-400">
+                          {tokenName} transfer to dead address • Run against your local CRE
+                        </div>
+                      </div>
+                    </div>
+                    {!signedDelegation && (
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-3">
+                        <div className="flex items-center gap-2 text-red-400 text-sm">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          No delegation found. Sign a delegation first for real execution to work.
+                        </div>
+                      </div>
+                    )}
+                    <div className="relative">
+                      <pre className="bg-zinc-900 rounded-lg p-4 text-cyan-400 font-mono text-xs overflow-x-auto whitespace-pre-wrap">
+                        {creTestPayload}
+                      </pre>
+                      <button
+                        onClick={() => copy(creTestPayload!, "cre")}
+                        className="absolute top-2 right-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 px-3 py-1.5 rounded-lg text-xs font-medium"
+                      >
+                        {copied === "cre" ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="text-sm text-zinc-400 font-medium">Test parameters (from your policy):</div>
+                    <div className="grid gap-2">
+                      <div className="bg-zinc-800/50 rounded-lg p-3">
+                        <div className="text-xs text-zinc-500">Smart Account</div>
+                        <code className="text-xs text-blue-400 break-all">{smartAccountAddress}</code>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded-lg p-3">
+                        <div className="text-xs text-zinc-500">Agent ID (bytes32)</div>
+                        <code className="text-xs text-amber-400 break-all">{agentIdBytes}</code>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded-lg p-3">
+                        <div className="text-xs text-zinc-500">Target Contract</div>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs text-green-400 break-all">{targetContract}</code>
+                          <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded">{tokenName}</span>
+                        </div>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded-lg p-3 flex justify-between items-center">
+                        <div>
+                          <div className="text-xs text-zinc-500">Test Amount</div>
+                          <code className="text-xs text-white">{testAmount.toFixed(4)} ETH</code>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-zinc-500">Max Allowed</div>
+                          <code className="text-xs text-green-400">{policy?.maxTxAmount || "1"} ETH</code>
+                        </div>
+                      </div>
+                      {policy?.enableTimeWindow && (
+                        <div className="bg-zinc-800/50 rounded-lg p-3">
+                          <div className="text-xs text-zinc-500">Time Window (UTC)</div>
+                          <code className="text-xs text-white">{policy.startHour}:00 - {policy.endHour}:00</code>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 space-y-2">
+                    <div className="text-sm text-zinc-300 font-medium">Test modes:</div>
+                    <div className="text-sm text-zinc-400">
+                      <span className="text-green-400">simulateOnly: true</span> - Runs on Tenderly Virtual TestNet (no delegation needed)
+                    </div>
+                    <div className="text-sm text-zinc-400">
+                      <span className="text-amber-400">simulateOnly: false</span> - Real on-chain execution (requires signed delegation)
+                    </div>
+                  </div>
+
+                  <a
+                    href="https://faucets.chain.link/base-sepolia"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-center bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 py-3 rounded-xl transition-colors"
+                  >
+                    Get testnet ETH &amp; {tokenName} (Chainlink Faucet)
+                  </a>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Step 1: Download Config */}
               <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-6 h-6 bg-amber-500 rounded-full flex items-center justify-center text-xs font-bold text-zinc-900">1</div>
@@ -1520,7 +2066,6 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
                 </button>
               </div>
 
-              {/* Step 2: Install SDK */}
               <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-6 h-6 bg-zinc-600 rounded-full flex items-center justify-center text-xs font-bold text-white">2</div>
@@ -1539,19 +2084,17 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
                 </div>
               </div>
 
-              {/* Step 3: Integrate */}
               <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-6 h-6 bg-zinc-600 rounded-full flex items-center justify-center text-xs font-bold text-white">3</div>
                   <div className="font-medium text-white">Integrate</div>
                 </div>
 
-                {/* Framework sub-tabs */}
                 <div className="flex gap-2 mb-4">
                   <button
-                    onClick={() => setManualFramework("vercel")}
+                    onClick={() => setSdkFramework("vercel")}
                     className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                      manualFramework === "vercel"
+                      sdkFramework === "vercel"
                         ? "bg-zinc-700 text-white"
                         : "bg-zinc-800 text-zinc-500 hover:text-white"
                     }`}
@@ -1559,9 +2102,9 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
                     Vercel AI SDK
                   </button>
                   <button
-                    onClick={() => setManualFramework("openai")}
+                    onClick={() => setSdkFramework("openai")}
                     className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                      manualFramework === "openai"
+                      sdkFramework === "openai"
                         ? "bg-zinc-700 text-white"
                         : "bg-zinc-800 text-zinc-500 hover:text-white"
                     }`}
@@ -1572,10 +2115,10 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
 
                 <div className="relative">
                   <pre className="bg-zinc-900 rounded-lg p-4 text-zinc-300 font-mono text-xs overflow-x-auto max-h-64">
-                    {manualFramework === "vercel" ? vercelCode : openaiCode}
+                    {sdkFramework === "vercel" ? vercelCode : openaiCode}
                   </pre>
                   <button
-                    onClick={() => copy(manualFramework === "vercel" ? vercelCode : openaiCode, "code")}
+                    onClick={() => copy(sdkFramework === "vercel" ? vercelCode : openaiCode, "code")}
                     className="absolute top-2 right-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 px-2 py-1 rounded text-xs"
                   >
                     {copied === "code" ? "Copied!" : "Copy"}
@@ -1585,7 +2128,6 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
             </div>
           )}
 
-          {/* Agent ID Section - always visible */}
           <div className="mt-6 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-amber-400 font-medium">Your Agent ID (bytes32)</div>
@@ -1600,7 +2142,6 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t border-zinc-800">
           <button
             onClick={onClose}
@@ -1634,9 +2175,9 @@ function ConnectWalletModal({
             <path d="M10 14h.01" />
           </svg>
         </div>
-        <h2 className="text-xl font-semibold mb-2">Connect Your Wallet</h2>
+        <h2 className="text-xl font-semibold mb-2">Sign In to Autonomify</h2>
         <p className="text-zinc-400 text-sm mb-6">
-          Connect your wallet to create and manage your AI agents. Your wallet address will be used to authenticate your agents.
+          Sign in with email, Google, or your existing wallet to create and manage your AI agents with a secure smart account.
         </p>
 
         <button
@@ -1645,13 +2186,15 @@ function ConnectWalletModal({
           className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 text-zinc-900 font-semibold py-4 rounded-xl transition-colors mb-3"
         >
           {isConnecting ? (
-            "Connecting..."
+            "Signing in..."
           ) : (
             <>
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21.805 2.195a1.5 1.5 0 0 0-1.566-.359L3.361 6.91a1.5 1.5 0 0 0-.084 2.79l7.418 3.088 3.088 7.418a1.5 1.5 0 0 0 2.79-.084l5.074-16.878a1.5 1.5 0 0 0-.842-2.049Z" />
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                <polyline points="10 17 15 12 10 7" />
+                <line x1="15" y1="12" x2="3" y2="12" />
               </svg>
-              Connect with MetaMask
+              Sign In
             </>
           )}
         </button>

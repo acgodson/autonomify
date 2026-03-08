@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.70",
+    "@metamask/delegation-toolkit": "^0.13.0",
     "@metamask/sdk": "^0.34.0",
     "@metamask/smart-accounts-kit": "0.4.0-beta.1",
     "@neondatabase/serverless": "^1.0.2",
     "@privy-io/node": "^0.9.0",
+    "@privy-io/react-auth": "^3.14.1",
     "@tanstack/react-query": "^5.90.21",
     "ai": "3",
     "autonomify-sdk": "file:../packages/autonomify-sdk",

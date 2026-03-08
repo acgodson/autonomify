@@ -5,4 +5,9 @@
  * All business logic lives in @/lib/agents.
  */
 
-export { getOrCreateBot, clearBotInstance } from "./bot"
+export {
+  getOrCreateBot,
+  clearBotInstance,
+  registerTelegramWebhook,
+  getWebhookInfo,
+} from "./bot"

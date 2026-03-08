@@ -9,4 +9,9 @@
  * - Discord: @/lib/channels/discord (coming soon)
  */
 
-export { getOrCreateBot as getTelegramBot, clearBotInstance as clearTelegramBot } from "./telegram"
+export {
+  getOrCreateBot as getTelegramBot,
+  clearBotInstance as clearTelegramBot,
+  registerTelegramWebhook,
+  getWebhookInfo,
+} from "./telegram"

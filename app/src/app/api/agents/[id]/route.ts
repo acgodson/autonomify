@@ -11,7 +11,7 @@ interface AgentDetail {
   id: string
   name: string
   type: ChannelType
-  walletAddress?: string
+  ownerAddress: string
   agentIdBytes?: string
   contracts: {
     address: string
@@ -28,7 +28,7 @@ function toDetail(agent: Agent): AgentDetail {
     id: agent.id,
     name: agent.name,
     type: agent.channel,
-    walletAddress: agent.wallet?.address,
+    ownerAddress: agent.ownerAddress,
     agentIdBytes: agent.agentIdBytes,
     contracts: agent.contracts.map((c) => ({
       address: c.address,
@@ -43,9 +43,10 @@ function toDetail(agent: Agent): AgentDetail {
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const agent = await getAgent(params.id)
+  const { id } = await params
+  const agent = await getAgent(id)
 
   if (!agent) {
     return NextResponse.json<ApiResponse>(
@@ -62,9 +63,10 @@ export async function GET(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const deleted = await deleteAgent(params.id)
+  const { id } = await params
+  const deleted = await deleteAgent(id)
 
   if (!deleted) {
     return NextResponse.json<ApiResponse>(

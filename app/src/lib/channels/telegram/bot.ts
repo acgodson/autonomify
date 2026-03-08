@@ -1,21 +1,15 @@
-/**
- * Telegram Bot Factory
- *
- * Creates and manages Telegram bot instances.
- * This is a thin wrapper - all business logic lives in @/lib/agent.
- */
-
 import { Bot } from "grammy"
 import { generateText, tool } from "ai"
 import { openai } from "@ai-sdk/openai"
 import { z } from "zod"
-import { getChain, getChainOrThrow } from "autonomify-sdk"
+import { getChainOrThrow } from "autonomify-sdk"
 import {
   type Agent,
   buildAgentPrompt,
   buildAgentExport,
   getNativeBalance,
-  executeDirectly,
+  executeViaCRE,
+  getDelegation,
   getConversationHistory,
   addUserMessage,
   addAssistantMessage,
@@ -28,16 +22,71 @@ import { DEFAULT_CHAIN_ID } from "@/lib/chains"
 
 const botInstances = new Map<string, Bot>()
 
+/**
+ * Register webhook with Telegram for an agent
+ */
+export async function registerTelegramWebhook(
+  agentId: string,
+  botToken: string
+): Promise<{ success: boolean; error?: string }> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL
+  if (!appUrl) {
+    return { success: false, error: "NEXT_PUBLIC_APP_URL not configured" }
+  }
+
+  const webhookUrl = `${appUrl}/api/telegram/webhook/${agentId}`
+
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${botToken}/setWebhook`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: webhookUrl,
+          allowed_updates: ["message"],
+        }),
+      }
+    )
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      return { success: false, error: data.description || "Failed to set webhook" }
+    }
+
+    console.log(`[Telegram] Webhook registered for agent ${agentId}: ${webhookUrl}`)
+    return { success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error"
+    return { success: false, error: message }
+  }
+}
+
+/**
+ * Get current webhook info for a bot
+ */
+export async function getWebhookInfo(botToken: string): Promise<{
+  url: string
+  pending_update_count: number
+  last_error_message?: string
+}> {
+  const response = await fetch(
+    `https://api.telegram.org/bot${botToken}/getWebhookInfo`
+  )
+  const data = await response.json()
+  return data.result
+}
+
 export function getOrCreateBot(agent: Agent): Bot {
-  if (!agent.channelToken || !agent.wallet) {
-    throw new Error("Telegram bot requires token and wallet")
+  if (!agent.channelToken) {
+    throw new Error("Telegram bot requires token")
   }
 
   const existing = botInstances.get(agent.id)
   if (existing) return existing
 
   const bot = new Bot(agent.channelToken)
-  const wallet = agent.wallet
 
   bot.command("start", async (ctx) => {
     const contractList = agent.contracts
@@ -49,43 +98,14 @@ export function getOrCreateBot(agent: Agent): Bot {
 
     await ctx.reply(
       `Welcome! I'm ${agent.name}, your onchain agent.\n\n` +
-        `My wallet: \`${wallet.address}\`\n\n` +
+        `Owner: \`${agent.ownerAddress}\`\n\n` +
         `Contracts I can interact with:\n${contractList || "None yet"}\n\n` +
         `Commands:\n` +
-        `/wallet - Show my wallet address\n` +
-        `/balance - Check my BNB balance\n` +
         `/contracts - List available contracts\n` +
         `/clear - Clear conversation history\n\n` +
         `Or just tell me what you want to do!`,
       { parse_mode: "Markdown" }
     )
-  })
-
-  bot.command("wallet", async (ctx) => {
-    const chain = agent.contracts[0]?.chain
-    const explorer = chain?.explorer || "https://testnet.bscscan.com"
-
-    await ctx.reply(
-      `My wallet address:\n\`${wallet.address}\`\n\n` +
-        `[View on Explorer](${explorer}/address/${wallet.address})`,
-      { parse_mode: "Markdown" }
-    )
-  })
-
-  bot.command("balance", async (ctx) => {
-    try {
-      const contract = agent.contracts[0]
-      const chainId = contract?.chainId || DEFAULT_CHAIN_ID
-      const chain = contract?.chain || getChainOrThrow(chainId)
-      const rpcUrl = chain.rpc[0]
-
-      const { formatted } = await getNativeBalance(chainId, rpcUrl, wallet.address)
-      const symbol = chain.nativeCurrency.symbol
-
-      await ctx.reply(`My balance: ${formatted} ${symbol}`)
-    } catch {
-      await ctx.reply("Failed to fetch balance")
-    }
   })
 
   bot.command("contracts", async (ctx) => {
@@ -171,13 +191,8 @@ async function processWithLLM(
   userMessage: string,
   _userMessageId: string
 ): Promise<string> {
-  if (!agent.wallet) throw new Error("Agent wallet required")
-  const agentWallet = agent.wallet
-
   const systemPrompt = buildAgentPrompt(agent)
-
   const history = await getConversationHistory(agent.id, chatId)
-
   const exportData = buildAgentExport(agent)
 
   const contract = agent.contracts[0]
@@ -185,28 +200,49 @@ async function processWithLLM(
   const chain = contract?.chain || getChainOrThrow(chainId)
   const rpcUrl = chain.rpc[0]
 
+  const delegation = await getDelegation(agent.ownerAddress, chainId)
+  if (!delegation) {
+    return "Owner has not set up delegation yet. Please ask them to complete account setup on the Autonomify dashboard."
+  }
+
   const { tool: autonomifyTool } = forVercelAI({
     export: exportData,
     agentId: agent.id,
     signAndSend: async (tx) => {
-      const result = await executeDirectly({
-        walletId: agentWallet.privyWalletId,
+      const targetContract = agent.contracts.find(
+        (c) => c.address.toLowerCase() === tx.to.toLowerCase()
+      )
+
+      if (!targetContract) {
+        throw new Error(`Contract ${tx.to} not found`)
+      }
+
+      const result = await executeViaCRE({
+        userAddress: agent.ownerAddress,
+        agentId: agent.id,
         chainId,
-        to: tx.to,
-        data: tx.data,
-        value: tx.value,
+        targetContract: tx.to,
+        functionAbi: targetContract.abi,
+        functionName: "execute",
+        args: [],
+        value: tx.value?.toString() || "0",
+        permissionsContext: delegation.signedDelegation,
+        simulateOnly: false,
       })
-      return result.hash
+
+      if (!result.success || result.mode !== "execution") {
+        throw new Error(result.error?.toString() || "Execution failed")
+      }
+
+      return result.txHash || ""
     },
   })
 
-  // Build messages
   const messages = [
     ...history,
     { role: "user" as const, content: userMessage },
   ]
 
-  // Track tool calls for loop detection
   const toolCallHistory: string[] = []
   let loopDetected = false
   const abortController = new AbortController()

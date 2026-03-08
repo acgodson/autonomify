@@ -1,21 +1,9 @@
-/**
- * Agent Store
- *
- * Persistence layer for agents using Drizzle ORM with Neon.
- * Channel-agnostic - supports Telegram, Discord, and self-hosted agents.
- */
-
 import { eq } from "drizzle-orm"
 import { randomBytes } from "crypto"
 import type { Abi } from "viem"
 import { getChain, isTestnet, type Chain, type FunctionExport } from "autonomify-sdk"
 import { db, agents, agentContracts } from "@/lib/db"
-import type { Agent, AgentWallet, AgentContract, ChannelType } from "./types"
-import { createAgentWallet } from "./wallet"
-
-export async function generateWallet(): Promise<AgentWallet> {
-  return createAgentWallet()
-}
+import type { Agent, AgentContract, ChannelType } from "./types"
 
 function generateAgentIdBytes(): string {
   return "0x" + randomBytes(32).toString("hex")
@@ -25,10 +13,13 @@ function dbRowToAgent(
   agent: typeof agents.$inferSelect,
   contracts: (typeof agentContracts.$inferSelect)[]
 ): Agent {
-  const agentData: Agent = {
+  return {
     id: agent.id,
     name: agent.name,
     channel: (agent.type || "telegram") as ChannelType,
+    ownerAddress: agent.ownerAddress,
+    channelToken: agent.telegramBotToken || undefined,
+    agentIdBytes: agent.agentIdBytes || undefined,
     contracts: contracts.map((c) => {
       const chain = getChain(c.chainId)
       return {
@@ -42,23 +33,6 @@ function dbRowToAgent(
     }),
     createdAt: agent.createdAt.getTime(),
   }
-
-                            
-  if (agent.type === "telegram" || agent.type === "discord" || !agent.type) {
-    agentData.channelToken = agent.telegramBotToken || undefined
-    if (agent.walletAddress && agent.walletId) {
-      agentData.wallet = {
-        address: agent.walletAddress,
-        privyWalletId: agent.walletId,
-      }
-    }
-  }
-
-  if (agent.type === "self_hosted") {
-    agentData.agentIdBytes = agent.agentIdBytes || undefined
-  }
-
-  return agentData
 }
 
 export interface CreateAgentOptions {
@@ -69,30 +43,7 @@ export interface CreateAgentOptions {
 }
 
 export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
-  if (options.channel === "self_hosted") {                                     
-    const agentIdBytes = generateAgentIdBytes()
-
-    const [agent] = await db
-      .insert(agents)
-      .values({
-        name: options.name,
-        type: "self_hosted",
-        ownerAddress: options.ownerAddress.toLowerCase(),
-        agentIdBytes,
-      })
-      .returning()
-
-    return {
-      id: agent.id,
-      name: agent.name,
-      channel: "self_hosted",
-      agentIdBytes,
-      contracts: [],
-      createdAt: agent.createdAt.getTime(),
-    }
-  }
-
-  const wallet = await generateWallet()
+  const agentIdBytes = generateAgentIdBytes()
 
   const [agent] = await db
     .insert(agents)
@@ -101,8 +52,7 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
       type: options.channel,
       ownerAddress: options.ownerAddress.toLowerCase(),
       telegramBotToken: options.channelToken,
-      walletId: wallet.privyWalletId,
-      walletAddress: wallet.address,
+      agentIdBytes,
     })
     .returning()
 
@@ -110,8 +60,9 @@ export async function createAgent(options: CreateAgentOptions): Promise<Agent> {
     id: agent.id,
     name: agent.name,
     channel: options.channel,
+    ownerAddress: agent.ownerAddress,
     channelToken: agent.telegramBotToken || undefined,
-    wallet,
+    agentIdBytes,
     contracts: [],
     createdAt: agent.createdAt.getTime(),
   }
@@ -187,7 +138,6 @@ export async function addContractToAgent(
   const agent = await getAgent(agentId)
   if (!agent) return undefined
 
-  // Chain validation: don't mix testnets and mainnets
   if (agent.contracts.length > 0) {
     const existingChainId = agent.contracts[0].chainId
     const existingIsTestnet = isTestnet(existingChainId)

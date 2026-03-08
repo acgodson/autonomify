@@ -7,9 +7,10 @@ import {
 } from "@/lib/agent"
 
 interface ExecuteBody {
+  userAddress: string
   contractAddress: string
   functionName: string
-  args: Record<string, unknown> | unknown[] // Support both formats
+  args: Record<string, unknown> | unknown[]
   value?: string
   simulate?: boolean
 }
@@ -18,18 +19,18 @@ interface ExecuteResponse {
   success: boolean
   txHash?: string
   explorerUrl?: string
-  gasEstimate?: string
-  returnData?: unknown
+  gasEstimate?: number
+  returnData?: string
+  nullifier?: string
+  gasUsed?: number
   error?: string
 }
 
-// Convert array args to named args for backwards compatibility
 function normalizeArgs(
   args: Record<string, unknown> | unknown[] | undefined
 ): Record<string, unknown> {
   if (!args) return {}
   if (Array.isArray(args)) {
-    // Convert array to object with numeric keys
     const result: Record<string, unknown> = {}
     args.forEach((arg, i) => {
       result[`arg${i}`] = arg
@@ -41,9 +42,10 @@ function normalizeArgs(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const agent = await getAgent(params.id)
+  const { id } = await params
+  const agent = await getAgent(id)
 
   if (!agent) {
     return NextResponse.json<ApiResponse>(
@@ -59,6 +61,13 @@ export async function POST(
   } catch {
     return NextResponse.json<ApiResponse>(
       { ok: false, error: "Invalid JSON body" },
+      { status: 400 }
+    )
+  }
+
+  if (!body.userAddress) {
+    return NextResponse.json<ApiResponse>(
+      { ok: false, error: "Missing userAddress" },
       { status: 400 }
     )
   }
@@ -89,7 +98,7 @@ export async function POST(
   }
 
   if (body.simulate) {
-    const result = await simulate(agent, executeParams)
+    const result = await simulate(agent, body.userAddress, executeParams)
 
     return NextResponse.json<ApiResponse<ExecuteResponse>>({
       ok: result.success,
@@ -97,13 +106,14 @@ export async function POST(
         success: result.success,
         gasEstimate: result.gasEstimate,
         returnData: result.returnData,
+        nullifier: result.nullifier,
         error: result.error,
       },
       error: result.error,
     })
   }
 
-  const result = await execute(agent, executeParams)
+  const result = await execute(agent, body.userAddress, executeParams)
 
   return NextResponse.json<ApiResponse<ExecuteResponse>>({
     ok: result.success,
@@ -111,6 +121,8 @@ export async function POST(
       success: result.success,
       txHash: result.txHash,
       explorerUrl: result.explorerUrl,
+      nullifier: result.nullifier,
+      gasUsed: result.gasUsed,
       error: result.error,
     },
     error: result.error,

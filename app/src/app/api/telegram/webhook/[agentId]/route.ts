@@ -1,10 +1,3 @@
-/**
- * Telegram Webhook Handler
- *
- * Handles incoming Telegram messages via the channel wrapper.
- * All business logic is in @/lib/agent and @/lib/channels/telegram.
- */
-
 import { NextRequest, NextResponse } from "next/server"
 import { webhookCallback } from "grammy"
 import { getAgent, type ApiResponse } from "@/lib/agent"
@@ -12,10 +5,11 @@ import { getTelegramBot } from "@/lib/channels"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { agentId: string } }
+  { params }: { params: Promise<{ agentId: string }> }
 ) {
   try {
-    const agent = await getAgent(params.agentId)
+    const { agentId } = await params
+    const agent = await getAgent(agentId)
 
     if (!agent) {
       return NextResponse.json<ApiResponse>(
@@ -24,7 +18,7 @@ export async function POST(
       )
     }
 
-    if (!agent.channelToken || !agent.wallet) {
+    if (!agent.channelToken) {
       return NextResponse.json<ApiResponse>(
         { ok: false, error: "Agent not configured for Telegram" },
         { status: 400 }

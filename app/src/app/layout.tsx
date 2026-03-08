@@ -19,7 +19,7 @@ const spaceMono = Space_Mono({
 
 export const metadata: Metadata = {
   title: "Autonomify",
-  description: "Turn any verified contract into a Telegram agent",
+  description: "Turn any verified contract into a AI agent",
 }
 
 export default function RootLayout({
@@ -28,8 +28,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} ${jetbrainsMono.variable} ${spaceMono.variable}`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.className} ${jetbrainsMono.variable} ${spaceMono.variable}`} suppressHydrationWarning>
         <NetworkProvider defaultMode="testnet">
           <WalletProvider>{children}</WalletProvider>
         </NetworkProvider>
