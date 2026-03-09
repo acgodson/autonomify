@@ -6,7 +6,7 @@
  */
 
 import { createPublicClient, http, getAddress, type Abi, type AbiFunction, type AbiParameter } from "viem"
-import { getChain, getBestRpcUrl, type Chain, type FunctionExport } from "autonomify-sdk"
+import { getChain, getRpcUrl, type Chain, type FunctionExport } from "autonomify-sdk"
 import { fetchAbi, isValidAddress } from "./fetcher"
 
 export interface ResolvedContract {
@@ -23,8 +23,9 @@ export async function resolveMetadata(
   address: string,
   abi: Abi
 ): Promise<Record<string, unknown>> {
-  // Use getBestRpcUrl which prefers Tenderly RPC if available
-  const rpcUrl = getBestRpcUrl(chain.id)
+  // Prefer Tenderly RPC from env for better ABI resolution
+  const tenderlyRpc = chain.id === 84532 ? process.env.TENDERLY_BASE_SEPOLIA_RPC : null
+  const rpcUrl = tenderlyRpc || getRpcUrl(chain.id)
   const client = createPublicClient({
     transport: http(rpcUrl),
   })
