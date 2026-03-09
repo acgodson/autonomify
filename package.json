@@ -3,13 +3,15 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --filter autonomify-app dev",
-    "build": "pnpm -r build",
+    "build": "pnpm build:sdk && pnpm build:app",
+    "build:app": "pnpm --filter autonomify-app build",
     "build:sdk": "pnpm --filter autonomify-sdk build",
-    "build:cli": "pnpm --filter create-autonomify build",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "cre": "cd packages/autonomify-cre/executor && bun run serve.ts"
   },
   "devDependencies": {
+    "concurrently": "^8.2.2",
     "turbo": "^2.0.0"
   }
 }
