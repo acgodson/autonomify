@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
 import { openai } from "@ai-sdk/openai"
-import type { FunctionExport } from "autonomify-sdk"
+import { and, eq } from "drizzle-orm"
+import type { FunctionExport, Chain } from "autonomify-sdk"
+import type { Abi } from "viem"
 import { type ApiResponse } from "@/lib/agent"
+import { db } from "@/lib/db"
+import { autonomifiedContracts } from "@/lib/db/schema"
 
 interface AnalyzeBody {
   address: string
+  chainId: number
+  chainConfig: Chain
+  abi: Abi
   metadata: Record<string, unknown>
   functions: FunctionExport[]
 }
@@ -93,6 +100,49 @@ Only respond with valid JSON, no markdown or explanation.`
         capabilities: ["Execute contract functions", "Read contract state"],
         functionDescriptions: {},
       }
+    }
+
+    // Save to autonomified_contracts cache (upsert)
+    const normalizedAddress = body.address.toLowerCase()
+    console.log("[analyze] Checking cache conditions:", {
+      address: normalizedAddress,
+      hasChainId: !!body.chainId,
+      hasChainConfig: !!body.chainConfig,
+      hasAbi: !!body.abi,
+      chainId: body.chainId,
+    })
+    if (body.chainId && body.chainConfig && body.abi) {
+      console.log("[analyze] Saving to autonomified_contracts...")
+      try {
+        await db
+          .insert(autonomifiedContracts)
+          .values({
+            address: normalizedAddress,
+            chainId: body.chainId,
+            chainConfig: body.chainConfig as any,
+            abi: body.abi as any,
+            metadata: body.metadata,
+            functions: body.functions as any,
+            analysis: analysis as any,
+          })
+          .onConflictDoUpdate({
+            target: [autonomifiedContracts.address, autonomifiedContracts.chainId],
+            set: {
+              chainConfig: body.chainConfig as any,
+              abi: body.abi as any,
+              metadata: body.metadata,
+              functions: body.functions as any,
+              analysis: analysis as any,
+              updatedAt: new Date(),
+            },
+          })
+        console.log("[analyze] Successfully saved to autonomified_contracts")
+      } catch (cacheErr) {
+        console.error("[analyze] Failed to cache autonomified contract:", cacheErr)
+        // Don't fail the request, caching is optional
+      }
+    } else {
+      console.log("[analyze] Skipping cache - missing required fields")
     }
 
     return NextResponse.json<ApiResponse<ContractAnalysis>>({

@@ -66,18 +66,54 @@ export function useWallet() {
 
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy")
 
+  // Log all wallets to debug
+  useEffect(() => {
+    if (wallets.length > 0) {
+      console.log("[useWallet] Available wallets (FULL):", wallets.map(w => ({
+        type: w.walletClientType,
+        connectorType: (w as any).connectorType,
+        walletClient: (w as any).walletClient,
+        address: w.address,
+      })))
+      console.log("[useWallet] Looking for 'privy' wallet, found:", embeddedWallet ? embeddedWallet.address : "NOT FOUND")
+    }
+  }, [wallets, embeddedWallet])
+
+  // Debug logging
+  useEffect(() => {
+    console.log("[useWallet] State:", {
+      privyReady,
+      walletsReady,
+      authenticated,
+      walletsCount: wallets.length,
+      walletTypes: wallets.map(w => w.walletClientType),
+      embeddedWallet: embeddedWallet?.address,
+      smartAccountAddress,
+      isSmartAccountLoading,
+    })
+  }, [privyReady, walletsReady, authenticated, wallets, embeddedWallet, smartAccountAddress, isSmartAccountLoading])
+
   useEffect(() => {
     async function deriveSmartAccount() {
+      console.log("[useWallet] deriveSmartAccount called:", {
+        hasEmbeddedWallet: !!embeddedWallet,
+        embeddedAddress: embeddedWallet?.address,
+        authenticated
+      })
+
       if (!embeddedWallet || !authenticated) {
+        console.log("[useWallet] Skipping smart account derivation:", { embeddedWallet: !!embeddedWallet, authenticated })
         setSmartAccount(null)
         setSmartAccountAddress(null)
         return
       }
 
       setIsSmartAccountLoading(true)
+      console.log("[useWallet] Starting smart account derivation...")
 
       try {
         const provider = await embeddedWallet.getEthereumProvider()
+        console.log("[useWallet] Got provider, creating wallet client...")
 
         const walletClient = createWalletClient({
           chain: baseSepolia,

@@ -31,7 +31,8 @@ export function useContractResolver(): UseContractResolverReturn {
     setError(null)
 
     try {
-      const res = await fetch(`/api/resolve?chainId=${chainId}&address=${address}`)
+      // Fetch full data with ABI in a single call for caching
+      const res = await fetch(`/api/resolve?chainId=${chainId}&address=${address}&full=true`)
       const json = await res.json()
 
       if (!json.ok) {
@@ -46,6 +47,9 @@ export function useContractResolver(): UseContractResolverReturn {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             address: json.data.address,
+            chainId: chainId,
+            chainConfig: json.data.chain,
+            abi: json.data.abi,
             metadata: json.data.metadata,
             functions: json.data.functions,
           }),
@@ -60,8 +64,8 @@ export function useContractResolver(): UseContractResolverReturn {
 
       setContract({
         address: json.data.address,
-        chain: json.data.chain,
-        chainId: json.data.chainId,
+        chain: json.data.chain.name,
+        chainId: json.data.chain.id,
         metadata: json.data.metadata,
         functions: json.data.functions,
         analysis,

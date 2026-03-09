@@ -64,7 +64,7 @@ export function buildCallSchema(fn: FunctionExport, contractAddress: `0x${string
 export const executeSchema = z.object({
   contractAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   functionName: z.string(),
-  args: z.record(z.unknown()),
+  args: z.record(z.unknown()).default({}),
   value: z.string().optional(),
 })
 

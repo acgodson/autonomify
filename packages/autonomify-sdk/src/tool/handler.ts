@@ -1,4 +1,4 @@
-import { createPublicClient, http, decodeFunctionResult, getAddress, type Abi } from "viem"
+import { createPublicClient, http, decodeFunctionResult, getAddress, formatUnits, type Abi } from "viem"
 import type { ToolConfig, ExecuteResult, StructuredCall } from "../types"
 import { encodeContractCall, buildTransaction } from "../core/encoder"
 import { findFunction, isReadOnly, serializeBigInts, argsToArray } from "../core/utils"
@@ -12,14 +12,24 @@ export async function executeCall(
 
   try {
     const contractAddress = getAddress(call.contractAddress) as `0x${string}`
+
+    // Debug logging
+    console.log(`[SDK] executeCall: ${call.functionName} on ${contractAddress}`)
+    console.log(`[SDK] Available contracts: ${Object.keys(exportData.contracts).join(", ")}`)
+
     const found = findFunction(exportData, contractAddress, call.functionName)
 
     if (!found) {
+      console.log(`[SDK] Function ${call.functionName} NOT FOUND on ${contractAddress}`)
       return {
         success: false,
         error: `Function ${call.functionName} not found on ${contractAddress}`,
       }
     }
+
+    console.log(`[SDK] Found function: ${found.fn.name} on ${found.contract}`)
+    console.log(`[SDK] Args: ${JSON.stringify(call.args)}`)
+    console.log(`[SDK] StateMutability: ${found.fn.stateMutability}`)
 
     const argsArray = argsToArray(
       exportData,
@@ -28,7 +38,11 @@ export async function executeCall(
       call.args
     )
 
-    if (isReadOnly(found.fn)) {
+    console.log(`[SDK] ArgsArray: ${JSON.stringify(argsArray)}`)
+
+    // Quoter functions are technically nonpayable but should be called as read-only
+    const isQuoterFunction = call.functionName.startsWith("quote")
+    if (isReadOnly(found.fn) || isQuoterFunction) {
       const client = createPublicClient({
         transport: http(rpcUrl || exportData.chain.rpc),
       })
@@ -51,6 +65,19 @@ export async function executeCall(
           data: result.data,
         })
 
+        // Format balanceOf results with symbol and decimals
+        if (call.functionName === "balanceOf" && typeof decoded === "bigint") {
+          const contract = exportData.contracts[contractAddress.toLowerCase() as `0x${string}`]
+          const decimals = (contract?.metadata?.decimals as number) || 18
+          const symbol = (contract?.metadata?.symbol as string) || "tokens"
+          const formatted = formatUnits(decoded, decimals)
+          return {
+            success: true,
+            readResult: `${formatted} ${symbol}`,
+            raw: decoded.toString(),
+          }
+        }
+
         return {
           success: true,
           readResult: serializeBigInts(decoded),
@@ -60,6 +87,8 @@ export async function executeCall(
       return { success: true, readResult: null }
     }
 
+    console.log(`[SDK] Building transaction for write function...`)
+
     const tx = buildTransaction(exportData, agentId, {
       contractAddress,
       functionName: call.functionName,
@@ -67,7 +96,12 @@ export async function executeCall(
       value: call.value,
     })
 
+    console.log(`[SDK] TX built: to=${tx.to}, data=${tx.data.slice(0, 20)}...`)
+    console.log(`[SDK] Calling submitTx...`)
+
     const txHash = await submitTx(tx)
+
+    console.log(`[SDK] TX submitted: ${txHash}`)
 
     return { success: true, txHash }
   } catch (error) {

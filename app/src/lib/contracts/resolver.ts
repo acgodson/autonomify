@@ -5,8 +5,8 @@
  * Uses SDK types and chains as the source of truth.
  */
 
-import { createPublicClient, http, type Abi, type AbiFunction, type AbiParameter } from "viem"
-import { getChain, type Chain, type FunctionExport } from "autonomify-sdk"
+import { createPublicClient, http, getAddress, type Abi, type AbiFunction, type AbiParameter } from "viem"
+import { getChain, getBestRpcUrl, type Chain, type FunctionExport } from "autonomify-sdk"
 import { fetchAbi, isValidAddress } from "./fetcher"
 
 export interface ResolvedContract {
@@ -23,9 +23,14 @@ export async function resolveMetadata(
   address: string,
   abi: Abi
 ): Promise<Record<string, unknown>> {
+  // Use getBestRpcUrl which prefers Tenderly RPC if available
+  const rpcUrl = getBestRpcUrl(chain.id)
   const client = createPublicClient({
-    transport: http(chain.rpc[0]),
+    transport: http(rpcUrl),
   })
+
+  // Ensure address is properly checksummed for viem
+  const checksummedAddress = getAddress(address) as `0x${string}`
 
   const zeroParamViewFunctions = abi.filter(
     (item): item is AbiFunction =>
@@ -39,7 +44,7 @@ export async function resolveMetadata(
   const calls = zeroParamViewFunctions.map(async (fn) => {
     try {
       const result = await client.readContract({
-        address: address as `0x${string}`,
+        address: checksummedAddress,
         abi: [fn],
         functionName: fn.name,
       })
@@ -64,6 +69,23 @@ export async function resolveMetadata(
   return metadata
 }
 
+/**
+ * Recursively extract param info including components for tuple types
+ */
+function extractParam(param: AbiParameter): { name: string; type: string; components?: any[] } {
+  const result: { name: string; type: string; components?: any[] } = {
+    name: param.name || "",
+    type: param.type,
+  }
+
+  // Handle tuple types with components
+  if ((param.type === "tuple" || param.type.startsWith("tuple[")) && "components" in param && param.components) {
+    result.components = param.components.map(extractParam)
+  }
+
+  return result
+}
+
 export function extractFunctions(abi: Abi): FunctionExport[] {
   return abi
     .filter((item): item is AbiFunction => item.type === "function")
@@ -75,14 +97,8 @@ export function extractFunctions(abi: Abi): FunctionExport[] {
         name: fn.name,
         signature,
         stateMutability: fn.stateMutability,
-        inputs: fn.inputs.map((i) => ({
-          name: i.name || "",
-          type: i.type,
-        })),
-        outputs: fn.outputs?.map((o) => ({
-          name: o.name || "",
-          type: o.type,
-        })) || [],
+        inputs: fn.inputs.map(extractParam),
+        outputs: fn.outputs?.map(extractParam) || [],
       }
     })
 }

@@ -82,8 +82,14 @@ export function buildAgentPrompt(agent: Agent): string {
 
   const agentContext = `## YOUR IDENTITY
 - Agent: ${agent.name}
-- Owner: ${agent.ownerAddress}
+- Owner Wallet: ${agent.ownerAddress}
 - Channel: ${agent.channel}
+
+## KEY BEHAVIOR
+- When user asks about "my balance", "my wallet", "my address", or "the balance", they mean the Owner Wallet above
+- Always use ${agent.ownerAddress} when checking balances for the user
+- For view/read functions (balanceOf, allowance, etc.), call them directly with the owner wallet
+- For write functions (transfer, approve, etc.), confirm with user first
 
 `
   return agentContext + sdkPrompt

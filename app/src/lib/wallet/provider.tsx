@@ -26,7 +26,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         loginMethods: ["email", "wallet", "google"],
         embeddedWallets: {
           ethereum: {
-            createOnLogin: "users-without-wallets",
+            createOnLogin: "all-users",
           },
         },
         defaultChain: baseSepolia,

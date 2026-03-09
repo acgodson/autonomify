@@ -9,6 +9,7 @@ export interface ChainConfig {
 export interface FunctionParam {
   name: string
   type: string
+  components?: FunctionParam[] // For tuple/struct types
 }
 
 export interface FunctionExport {
@@ -56,6 +57,7 @@ export interface ExecuteResult {
   success: boolean
   txHash?: string
   readResult?: unknown
+  raw?: string
   error?: string
   simulationResult?: string
 }

@@ -102,7 +102,12 @@ export async function triggerCRE(params: CRETriggerParams): Promise<CREResult> {
   })
 
   if (!response.ok) {
-    throw new Error(`CRE trigger failed: ${response.statusText}`)
+    // Try to get error body for more details
+    let errorBody = ""
+    try {
+      errorBody = await response.text()
+    } catch {}
+    throw new Error(`CRE trigger failed: ${response.statusText}${errorBody ? ` - ${errorBody}` : ""}`)
   }
 
   return response.json()

@@ -4,6 +4,7 @@ import {
   forVercelAI,
   buildTransaction,
   getExplorerUrl,
+  argsToArray,
   type AutonomifyExport,
 } from "autonomify-sdk"
 import {
@@ -50,6 +51,7 @@ export function createAgentTools(ctx: ToolContext) {
   const { tool: executeTool } = forVercelAI({
     export: ctx.exportData,
     agentId: ctx.agentIdBytes,
+    rpcUrl: ctx.rpcUrl,
     submitTx: async (tx: any) => {
       const result = await triggerCRE({
         userAddress: ctx.ownerAddress,
@@ -75,14 +77,14 @@ export function createAgentTools(ctx: ToolContext) {
   })
 
   const simulateTool = tool({
-    description: `Simulate a transaction WITHOUT executing. Use when user says "simulate", "test", "dry run", or "check if this would work".`,
+    description: `Simulate a WRITE transaction WITHOUT executing. Use when user says "simulate", "test", "dry run", or "check if this would work" for transfers, swaps, or approvals. Do NOT use for quotes - use autonomify_execute for quoteExactInputSingle.`,
     parameters: z.object({
       contractAddress: z.string().describe("Contract address (0x...)"),
       functionName: z.string().describe("Function name"),
-      args: z.record(z.unknown()).describe("Named arguments"),
+      args: z.record(z.unknown()).default({}).describe("Named arguments as object"),
       value: z.string().optional().describe("Native token value in ETH"),
     }),
-    execute: async ({ contractAddress, functionName, args, value }) => {
+    execute: async ({ contractAddress, functionName, args = {}, value }) => {
       const contractKey = contractAddress.toLowerCase() as `0x${string}`
       const contractData = ctx.exportData.contracts[contractKey]
 
@@ -95,10 +97,12 @@ export function createAgentTools(ctx: ToolContext) {
         return { success: false, error: `Function ${functionName} not found` }
       }
 
+      const argsArray = argsToArray(ctx.exportData, contractKey, functionName, args)
+
       const tx = buildTransaction(ctx.exportData, ctx.agentIdBytes, {
         contractAddress: contractKey,
         functionName,
-        args: Object.values(args),
+        args: argsArray,
         value,
       })
 
@@ -135,20 +139,8 @@ export function createAgentTools(ctx: ToolContext) {
     },
   })
 
-  const balanceTool = tool({
-    description: "Get native token balance of a wallet address.",
-    parameters: z.object({
-      address: z.string().describe("Wallet address to check"),
-    }),
-    execute: async ({ address }) => {
-      const { getNativeBalance } = await import("@/lib/agent")
-      return getNativeBalance(ctx.chainId, ctx.rpcUrl, address)
-    },
-  })
-
   return {
     autonomify_execute: executeTool,
     autonomify_simulate: simulateTool,
-    get_native_balance: balanceTool,
   }
 }

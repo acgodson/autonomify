@@ -1,6 +1,6 @@
 {
-  "enclaveUrl": "http://your-enclave-url:8001",
-  "executorAddress": "0xYourExecutorContractAddress",
+  "enclaveUrl": "http://3.71.199.191:8001",
+  "executorAddress": "0xD44def7f75Fea04B402688FF14572129D2BEeb05",
   "authorizedKey": "0xYourAuthorizedPublicKey",
   "chainSelector": "10344971235874465080",
   "tenderlyRpc": "https://base-sepolia.gateway.tenderly.co/YOUR_TENDERLY_KEY",

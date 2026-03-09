@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { and, eq } from "drizzle-orm"
 import {
   getAgent,
   addContractToAgent,
@@ -6,17 +7,17 @@ import {
   type AgentContract,
   type ApiResponse,
 } from "@/lib/agent"
-import {
-  fetchAbi,
-  isValidAddress,
-  resolveMetadata,
-  extractFunctions,
-} from "@/lib/contracts"
+import { syncPolicyToEnclave, type EnclavePolicyConfig } from "@/lib/agent/cre"
+import { db } from "@/lib/db"
+import { agentAllowedContracts, agentPolicies, agents, autonomifiedContracts } from "@/lib/db/schema"
+import { isValidAddress } from "@/lib/contracts"
 import {
   resolveChainIdWithDefault,
   getChainOrThrow,
   DEFAULT_CHAIN_ID,
 } from "@/lib/chains"
+import type { FunctionExport, Chain } from "autonomify-sdk"
+import type { Abi } from "viem"
 
 interface ContractAnalysis {
   name: string
@@ -115,19 +116,44 @@ export async function POST(
     )
   }
 
+  // === VALIDATION: Contract must be autonomified first ===
+  const normalizedAddress = address.toLowerCase()
+  const [cachedContract] = await db
+    .select()
+    .from(autonomifiedContracts)
+    .where(
+      and(
+        eq(autonomifiedContracts.address, normalizedAddress),
+        eq(autonomifiedContracts.chainId, chainId)
+      )
+    )
+    .limit(1)
+
+  if (!cachedContract) {
+    return NextResponse.json<ApiResponse>(
+      {
+        ok: false,
+        error: `Contract ${address} has not been autonomified. Use the Autonomify frontend to analyze the contract first.`,
+      },
+      { status: 400 }
+    )
+  }
+
   try {
-    const { abi } = await fetchAbi(chainId, address)
-    const metadata = await resolveMetadata(chain, address, abi)
-    const functions = extractFunctions(abi)
+    // Use cached data from autonomified_contracts
+    const abi = cachedContract.abi as Abi
+    const metadata = cachedContract.metadata as Record<string, unknown>
+    const functions = cachedContract.functions as FunctionExport[]
+    const analysis = cachedContract.analysis as ContractAnalysis | undefined
 
     const contract: AgentContract = {
-      address,
+      address: normalizedAddress,
       chainId,
       chain,
       abi,
       metadata,
       functions,
-      analysis: body.analysis,
+      analysis,
     }
 
     const updated = await addContractToAgent(params.id, contract)
@@ -139,10 +165,117 @@ export async function POST(
       )
     }
 
+    // === WHITELIST SYNC ===
+    // 1. Add contract to agentAllowedContracts table
+    await db
+      .insert(agentAllowedContracts)
+      .values({
+        agentId: params.id,
+        contractAddress: normalizedAddress,
+      })
+      .onConflictDoNothing()
+
+    // 2. Get ALL allowed contracts for this agent
+    const allAllowedContracts = await db
+      .select()
+      .from(agentAllowedContracts)
+      .where(eq(agentAllowedContracts.agentId, params.id))
+
+    const allowedAddresses = allAllowedContracts.map((c) => c.contractAddress)
+
+    // 3. Rebuild merkle tree with verification service
+    let whitelistRoot: string | null = null
+    let whitelistPath: string[] = ["0", "0"]
+    let whitelistIndex = 0
+
+    try {
+      const merkleRes = await fetch(
+        `${process.env.VERIFICATION_SERVICE_URL || "http://localhost:3001"}/merkle`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            addresses: allowedAddresses,
+            targetIndex: allowedAddresses.length - 1, // new contract is last
+          }),
+        }
+      )
+      const merkleData = await merkleRes.json()
+      if (merkleData.root) {
+        whitelistRoot = merkleData.root
+        whitelistPath = merkleData.path
+        whitelistIndex = merkleData.index
+      }
+    } catch (merkleErr) {
+      console.error("Failed to generate merkle root:", merkleErr)
+    }
+
+    // 4. Update agent_policies.whitelist_root
+    if (whitelistRoot) {
+      await db
+        .update(agentPolicies)
+        .set({ whitelistRoot, syncStatus: "pending" })
+        .where(eq(agentPolicies.agentId, params.id))
+    }
+
+    // 5. Sync updated policy to enclave
+    const [agentRecord] = await db
+      .select()
+      .from(agents)
+      .where(eq(agents.id, params.id))
+      .limit(1)
+
+    if (agentRecord?.agentIdBytes && whitelistRoot) {
+      // Get current policy settings
+      const [policy] = await db
+        .select()
+        .from(agentPolicies)
+        .where(eq(agentPolicies.agentId, params.id))
+        .limit(1)
+
+      if (policy) {
+        try {
+          const enclaveConfig: EnclavePolicyConfig = {
+            maxAmount: {
+              enabled: true,
+              limit: parseInt(policy.txLimit || "0"),
+            },
+            timeWindow: {
+              enabled: policy.enableTimeWindow === 1,
+              startHour: policy.startHour || 0,
+              endHour: policy.endHour || 24,
+            },
+            whitelist: {
+              enabled: true,
+              root: whitelistRoot,
+              path: whitelistPath,
+              index: whitelistIndex,
+            },
+          }
+
+          const enclaveResult = await syncPolicyToEnclave(
+            agentRecord.ownerAddress,
+            agentRecord.agentIdBytes,
+            enclaveConfig
+          )
+
+          if (enclaveResult.success) {
+            await db
+              .update(agentPolicies)
+              .set({ syncStatus: "synced", lastSyncedAt: new Date() })
+              .where(eq(agentPolicies.agentId, params.id))
+            console.log(`[Contracts API] Policy synced to enclave for agent ${params.id}`)
+          }
+        } catch (enclaveErr) {
+          console.error("Failed to sync policy to enclave:", enclaveErr)
+        }
+      }
+    }
+
     return NextResponse.json<ApiResponse<ContractResponse>>({
       ok: true,
       data: {
-        address,
+        address: normalizedAddress,
         chain: chain.name,
         chainId,
         metadata,

@@ -16,14 +16,36 @@ const BASE_PROMPT = `You are an autonomous onchain agent powered by Autonomify.
 - Be safe. Always confirm before executing transactions.
 - Be honest. If you can't do something, say so.
 
+## CRITICAL: Token Names and Symbols
+
+Tokens have both names AND symbols. Match user requests to ANY of these:
+- "LINK" = "ChainLink Token" = the LINK contract
+- "WETH" = "Wrapped Ether" = the WETH contract
+- "ETH" for native operations
+
+When user says "LINK", "link", "Chainlink", or "ChainLink Token" - they ALL mean the ChainLink Token contract.
+
+**ALWAYS:**
+- Match token symbols (LINK, WETH) to your contracts
+- Match partial names (Chainlink = ChainLink Token)
+- USE the autonomify_execute tool - don't say "not recognized" without trying
+- If a contract IS in your list, USE IT
+
+**NEVER:**
+- Say a contract "is not recognized" when it's in your contracts list
+- Refuse to execute when the contract exists
+- Invent addresses not in your list
+
 ## Transaction Safety
 
-Before ANY write operation (transfers, swaps, approvals):
+For write operations (transfers, swaps, approvals):
 
-1. Show exactly what you're about to do
-2. Show amounts in human format (e.g., "100 USDT" not "100000000000000000000")
-3. Ask for confirmation
+1. Show exactly what you're about to do with amounts in human format
+2. If user explicitly says "execute", "now", "do it", or "confirm" - proceed immediately
+3. For large amounts (>1 token), ask for confirmation first
 4. After success, provide transaction hash and explorer link
+
+**IMPORTANT:** When user confirms with "yes", "confirm", "proceed", or similar - EXECUTE THE TRANSACTION by calling autonomify_execute. Do NOT say "contract not found" - the contract IS in your list.
 
 ## Error Handling
 
@@ -75,6 +97,30 @@ After simulation, report whether it would succeed and estimated gas.
 3. Use exact parameter names from function signature
 4. \`value\` in native units: \`"0.01"\` = 0.01 of native token
 
+### Struct/Tuple Parameters
+
+Some functions take struct parameters (shown as \`tuple\` type). Format these as nested objects with the exact field names from the struct definition.
+
+**Example:** For a function like \`quoteExactInputSingle(tuple params)\` where the struct has fields \`{tokenIn, tokenOut, amountIn, fee, sqrtPriceLimitX96}\`:
+
+\`\`\`json
+{
+  "contractAddress": "0x...",
+  "functionName": "quoteExactInputSingle",
+  "args": {
+    "params": {
+      "tokenIn": "0x...",
+      "tokenOut": "0x...",
+      "amountIn": "1000000000000000000",
+      "fee": "3000",
+      "sqrtPriceLimitX96": "0"
+    }
+  }
+}
+\`\`\`
+
+The struct fields will be shown in the function description when applicable.
+
 ---
 
 ## Amount Conversions
@@ -119,12 +165,33 @@ export function buildPrompt(exportData: AutonomifyExport): string {
     const fnList = contract.functions
       .map((fn) => {
         const params = fn.inputs.map((i) => `${i.type} ${i.name}`).join(", ")
-        return `- ${fn.name}(${params}) [${fn.stateMutability}]`
+        let fnLine = `- ${fn.name}(${params}) [${fn.stateMutability}]`
+
+        // Show struct components for tuple parameters
+        fn.inputs.forEach((input) => {
+          if ((input.type === "tuple" || input.type.startsWith("tuple[")) && input.components) {
+            const fields = input.components.map((c) => `${c.type} ${c.name}`).join(", ")
+            fnLine += `\n  - ${input.name}: { ${fields} }`
+          }
+        })
+
+        return fnLine
       })
       .join("\n")
 
     const pattern = detectPattern(contract.functions)
     let contractSection = `### ${contract.name}\nAddress: \`${address}\``
+
+    // Add token metadata if available (symbol, decimals, etc.)
+    const meta = contract.metadata || {}
+    const symbol = meta.symbol as string | undefined
+    const decimals = meta.decimals as number | undefined
+    if (symbol) {
+      contractSection += `\nSymbol: ${symbol}`
+    }
+    if (decimals !== undefined) {
+      contractSection += `\nDecimals: ${decimals}`
+    }
 
     if (pattern && pattern.type !== "unknown") {
       contractSection += `\nType: ${pattern.name}`
@@ -140,7 +207,7 @@ export function buildPrompt(exportData: AutonomifyExport): string {
   if (contractSections.length > 0) {
     sections.push(`---
 
-## Your Contracts
+## Your Contracts (ONLY use these addresses)
 
 ${contractSections.join("\n\n")}`)
   }

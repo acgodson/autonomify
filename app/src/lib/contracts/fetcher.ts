@@ -9,7 +9,7 @@
  * API keys are resolved from environment variables per-chain.
  */
 
-import type { Abi } from "viem"
+import type { Abi, AbiParameter } from "viem"
 import { getChainOrThrow, type Chain, type ExplorerType } from "@/lib/chains"
 import { getExplorerApiKey } from "@/lib/chains"
 
@@ -35,19 +35,15 @@ interface TenderlyAbiItem {
   constant: boolean
   anonymous: boolean
   stateMutability: string
-  inputs: TenderlyAbiInput[] | null
-  outputs: TenderlyAbiOutput[] | null
+  inputs: TenderlyAbiParam[] | null
+  outputs: TenderlyAbiParam[] | null
 }
 
-interface TenderlyAbiInput {
+interface TenderlyAbiParam {
   name: string
   type: string
   indexed?: boolean
-}
-
-interface TenderlyAbiOutput {
-  name: string
-  type: string
+  components?: TenderlyAbiParam[] | null
 }
 
 // =============================================================================
@@ -156,6 +152,25 @@ const TENDERLY_RPC_URLS: Record<number, string> = {
 }
 
 /**
+ * Normalize a Tenderly ABI parameter to standard format (handles nested tuples)
+ */
+function normalizeParam(param: TenderlyAbiParam): AbiParameter {
+  const result: AbiParameter = {
+    name: param.name,
+    type: param.type as AbiParameter["type"],
+  }
+
+  // Handle tuple types with components (structs)
+  if (param.type === "tuple" || param.type.startsWith("tuple[")) {
+    if (param.components && param.components.length > 0) {
+      result.components = param.components.map(normalizeParam)
+    }
+  }
+
+  return result
+}
+
+/**
  * Convert Tenderly ABI format to standard ABI format
  */
 function normalizeTenderlyAbi(tenderlyAbi: TenderlyAbiItem[]): Abi {
@@ -164,8 +179,8 @@ function normalizeTenderlyAbi(tenderlyAbi: TenderlyAbiItem[]): Abi {
       return {
         type: "function" as const,
         name: item.name,
-        inputs: (item.inputs || []).map((i) => ({ name: i.name, type: i.type })),
-        outputs: (item.outputs || []).map((o) => ({ name: o.name, type: o.type })),
+        inputs: (item.inputs || []).map(normalizeParam),
+        outputs: (item.outputs || []).map(normalizeParam),
         stateMutability: (item.stateMutability || "nonpayable") as "pure" | "view" | "nonpayable" | "payable",
       }
     }
@@ -174,8 +189,7 @@ function normalizeTenderlyAbi(tenderlyAbi: TenderlyAbiItem[]): Abi {
         type: "event" as const,
         name: item.name,
         inputs: (item.inputs || []).map((i) => ({
-          name: i.name,
-          type: i.type,
+          ...normalizeParam(i),
           indexed: i.indexed || false,
         })),
       }
@@ -183,7 +197,7 @@ function normalizeTenderlyAbi(tenderlyAbi: TenderlyAbiItem[]): Abi {
     if (item.type === "constructor") {
       return {
         type: "constructor" as const,
-        inputs: (item.inputs || []).map((i) => ({ name: i.name, type: i.type })),
+        inputs: (item.inputs || []).map(normalizeParam),
         stateMutability: (item.stateMutability || "nonpayable") as "nonpayable" | "payable",
       }
     }

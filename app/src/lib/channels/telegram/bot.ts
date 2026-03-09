@@ -219,11 +219,11 @@ async function processWithLLM(
   const abortController = new AbortController()
 
   const result = await generateText({
-    model: openai("gpt-4o-mini"),
+    model: openai("gpt-4o"),
     system: systemPrompt,
     messages,
     tools,
-    maxSteps: 2,
+    maxSteps: 5,
     abortSignal: abortController.signal,
     onStepFinish: ({ toolCalls }) => {
       if (toolCalls && toolCalls.length > 0) {

@@ -110,6 +110,23 @@ export const agentContracts = pgTable("agent_contracts", {
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant", "system", "tool"])
 export const messageStatusEnum = pgEnum("message_status", ["pending", "processing", "completed", "error"])
 
+// Global registry of autonomified contracts (cached analysis)
+// address + chainId is unique - any agent can use these
+export const autonomifiedContracts = pgTable("autonomified_contracts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  address: text("address").notNull(),
+  chainId: integer("chain_id").notNull(),
+  chainConfig: jsonb("chain_config").notNull(),
+  abi: jsonb("abi").notNull(),
+  metadata: jsonb("metadata").notNull().default({}),
+  functions: jsonb("functions").notNull().default([]),
+  analysis: jsonb("analysis"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  addressChainUnique: uniqueIndex("autonomified_contracts_address_chain_idx").on(table.address, table.chainId),
+}))
+
 export const conversationMessages = pgTable("conversation_messages", {
   id: uuid("id").primaryKey().defaultRandom(),
   agentId: uuid("agent_id")
@@ -188,3 +205,5 @@ export type AgentContract = typeof agentContracts.$inferSelect
 export type NewAgentContract = typeof agentContracts.$inferInsert
 export type ConversationMessage = typeof conversationMessages.$inferSelect
 export type NewConversationMessage = typeof conversationMessages.$inferInsert
+export type AutonomifiedContract = typeof autonomifiedContracts.$inferSelect
+export type NewAutonomifiedContract = typeof autonomifiedContracts.$inferInsert

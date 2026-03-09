@@ -1,0 +1,10 @@
+{
+  "userAddress": "0xf2750684eB187fF9f82e2F980f6233707eF5768C",
+  "agentId": "e4f6d157-e38d-45e1-b3eb-45e058feafbf",
+  "execution": {
+    "target": "0xD44def7f75Fea04B402688FF14572129D2BEeb05",
+    "calldata": "0x",
+    "value": "0"
+  },
+  "permissionsContext": "DELEGATION_REQUIRED"
+}

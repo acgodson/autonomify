@@ -6,10 +6,17 @@ Autonomify uses Chainlink CRE to orchestrate secure AI agent execution workflows
 
 | Component | File | Lines |
 |-----------|------|-------|
+| **CRE Workflow** | | |
 | CRE Workflow Entry | [`packages/autonomify-cre/executor/index.ts`](../packages/autonomify-cre/executor/index.ts) | Main workflow |
 | HTTP Trigger & Payload | [`index.ts:25-50`](../packages/autonomify-cre/executor/index.ts#L25-L50) | Extract execution request |
 | ZK Proof Request | [`lib/enclave.ts:10`](../packages/autonomify-cre/executor/lib/enclave.ts#L10) | `requestZkProof()` |
 | Report Submission | [`index.ts:171`](../packages/autonomify-cre/executor/index.ts#L171) | `writeReport()` |
+| **App Integration** | | |
+| `triggerCRE()` | [`app/src/lib/agent/cre.ts:85`](../app/src/lib/agent/cre.ts#L85) | Trigger CRE workflow |
+| `CRETriggerParams` | [`cre.ts:34`](../app/src/lib/agent/cre.ts#L34) | Payload interface |
+| SDK `submitTx` callback | [`runner.ts:98`](../app/src/lib/agent/runner.ts#L98) | Agent tool integration |
+| Telegram bot | [`telegram/bot.ts:212`](../app/src/lib/channels/telegram/bot.ts#L212) | Bot CRE trigger |
+| **Executor Contract** | | |
 | Executor Contract | [`contracts/src/AutonomifyExecutor.sol`](../contracts/src/AutonomifyExecutor.sol) | IReceiver implementation |
 | `onReport()` Handler | [`AutonomifyExecutor.sol:51`](../contracts/src/AutonomifyExecutor.sol#L51) | CRE Forwarder callback |
 | Nullifier Tracking | [`AutonomifyExecutor.sol:17`](../contracts/src/AutonomifyExecutor.sol#L17) | Replay protection |

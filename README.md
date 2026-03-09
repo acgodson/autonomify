@@ -32,53 +32,85 @@ Autonomify solves this by separating **proposal** from **authorization** from **
 
 
 
-## Local Development
+## Testing Guide 
 
-### Prerequisites
+### Quick Test: AI Agent Demo (5 minutes)
 
-To run locally, you'll need:
-
-| Tool | Version | Install |
-|------|---------|---------|
-| **Node.js** | 20+ | [nodejs.org](https://nodejs.org) |
-| **pnpm** | 8+ | `npm install -g pnpm` |
-| **Bun** | 1.0+ | `curl -fsSL https://bun.sh/install \| bash` |
-| **ngrok** | 3+ | `brew install ngrok` or [ngrok.com](https://ngrok.com) |
-| **CRE CLI** | latest | [Chainlink CRE docs](https://docs.chain.link/cre) |
-
-### Required API Keys
-
-Create `app/.env` from `app/.env.example` and fill in:
-
-```env
-OPENAI_API_KEY=        # For AI agent LLM
-PRIVY_ID=              # Wallet connection for frontend testing (privy.io)
-PRIVY_SECRET=
-DATABASE_URL=          # Postgres (e.g., Neon)
-```
+Run the AI agent test to see the full flow: AI understands requests → encodes transactions → triggers CRE workflow.
 
 ```bash
-# Clone and install
-git clone https://github.com/your-repo/autonomify
-cd autonomify
-pnpm install
+cd packages/autonomify-cre
 
-# Configure environment
-cp app/.env.example app/.env
-# Edit app/.env with your API keys
-
-# Start everything (ngrok + CRE + app)
-pnpm start
 ```
 
-This will:
-1. Start ngrok tunnel and auto-inject the URL into `.env`
-2. Start CRE workflow simulation with `--broadcast`
-3. Start the Next.js dev server
+Edit `executor/config.staging.json`:
+```json
+{
+  "enclaveUrl": "http://3.71.199.191:8001",
+  "executorAddress": "0xD44def7f75Fea04B402688FF14572129D2BEeb05",
+  "authorizedKey": "0xYOUR_WALLET_ADDRESS",
+  "chainSelector": "10344971235874465080",
+  "tenderlyRpc": "https://base-sepolia.gateway.tenderly.co/YOUR_KEY",
+  "virtualTestnetRpc": "https://virtual.base-sepolia.eu.rpc.tenderly.co/YOUR_VNET_ID"
+}
+```
+```bash
 
-Open `http://localhost:3000` (or the ngrok URL for Telegram webhooks).
+cp .env.example .env
+```
 
+Edit `.env` (in autonomify-cre root):
+```env
+CRE_ETH_PRIVATE_KEY=your_private_key_for_authorizedKey
+OPENAI_API_KEY=sk-your-openai-key
+```
+```bash
+
+```bash
+
+# Install and run
+cd executor
+bun install
+bun run test
+```
+
+**Expected output:**
+```
+════════════════════════════════════════════════════════════
+  AUTONOMIFY AI AGENT TEST
+════════════════════════════════════════════════════════════
+  Owner: 0x16e0e714...2f2a3720
+  CRE URL: http://localhost:8080/trigger
+  Chain: Base Sepolia (84532)
+  Running: 3 scenario(s)
+
+────────────────────────────────────────────────────────────
+  SCENARIO: Check LINK balance
+────────────────────────────────────────────────────────────
+  User: What's my LINK balance?
+  -> Calling balanceOf on 0xe4ab69c0...
+  [OK] 0.808 LINK
+  Agent: Your LINK balance is 0.808 LINK.
+
+────────────────────────────────────────────────────────────
+  SCENARIO: Get swap quote
+────────────────────────────────────────────────────────────
+  User: Get me a quote to swap 0.1 LINK for WETH
+  -> Calling quoteExactInputSingle on 0xc5290058...
+  [OK] {"amountOut":"0.000005282563324959"...}
+  Agent: The quote to swap 0.1 LINK for WETH is approximately 0.00000528 WETH.
+
+  Total: 3 passed, 0 failed
+════════════════════════════════════════════════════════════
+```
+
+**Run specific test categories:**
+```bash
+bun run test:balance    # Token balance checks
+bun run test:quote      # DEX quotes with tuple encoding
+```
 ---
+
 
 ## Deployments
 
@@ -88,44 +120,18 @@ Open `http://localhost:3000` (or the ngrok URL for Telegram webhooks).
 
 ---
 
-## Quick Start
 
-### Option 1: Hosted Telegram Bot (Easiest)
+### Telegram vs Self-Hosted
 
-1. Go to [autonomify.vercel.app](https://autonomify.vercel.app)
-2. Paste a verified contract address → Click "Launch Agent" → Choose "Telegram"
-3. Enter your bot token (from [@BotFather](https://t.me/BotFather))
-4. Start chatting with your bot — we handle the smart wallet ([via Privy](https://docs.privy.io))
+| Feature | Telegram (Hosted) | Self-Hosted |
+|---------|-------------------|-------------|
+| System Prompt | Auto-generated with agent identity | You generate via SDK or custom |
+| Execution | Routed through our API | Direct CRE calls |
+| Conversation | Stored encrypted in our DB | Your responsibility |
+| Customization | Limited | Full control |
 
-### Option 2: Self-hosted Agent
 
-1. Go to [autonomify.vercel.app](https://autonomify.vercel.app)
-2. Paste a verified contract address → Click "Launch Agent" → Choose "Self-hosted"
-3. Download your `autonomify.json` config file
-4. Use the SDK with your AI framework:
-
-```typescript
-import { forVercelAI } from "autonomify-sdk"
-import { generateText } from "ai"
-import config from "./autonomify.json"
-
-const { tool, prompt } = forVercelAI({
-  export: config,
-  agentId: config.agentId,
-  signAndSend: async (tx) => {
-    // Route to CRE for trustless execution
-    return executeViaCRE({ ...tx, delegation })
-  }
-})
-
-const { text } = await generateText({
-  model: openai("gpt-4o"),
-  tools: { autonomify_execute: tool },
-  system: prompt,
-  prompt: "Transfer 100 USDT to 0x..."
-})
-```
-
+---
 
 ## Architecture
 

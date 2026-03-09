@@ -1,7 +1,52 @@
-import { encodeFunctionData, parseEther, type Abi } from "viem"
+import { encodeFunctionData, parseEther, type Abi, type AbiParameter } from "viem"
 import type { AutonomifyExport, ExecuteParams, UnsignedTransaction } from "../types"
 import { EXECUTOR_ABI, toBytes32 } from "./executor"
 import { parseStringifiedArray } from "./utils"
+
+/**
+ * Recursively convert values to appropriate types based on ABI parameter types.
+ * Handles nested tuples/structs and arrays.
+ */
+function convertValue(value: unknown, paramType: string, components?: readonly AbiParameter[]): unknown {
+  let processed = parseStringifiedArray(value)
+
+  // Handle arrays
+  if (paramType.endsWith("[]")) {
+    const baseType = paramType.slice(0, -2)
+    if (Array.isArray(processed)) {
+      return processed.map((item) => convertValue(item, baseType, components))
+    }
+    return processed
+  }
+
+  // Handle tuples (structs) - recursively process fields
+  if (paramType === "tuple" && components && typeof processed === "object" && processed !== null) {
+    const obj = processed as Record<string, unknown>
+    const result: Record<string, unknown> = {}
+    for (const comp of components) {
+      if (comp.name && obj[comp.name] !== undefined) {
+        result[comp.name] = convertValue(
+          obj[comp.name],
+          comp.type,
+          "components" in comp ? (comp.components as readonly AbiParameter[]) : undefined
+        )
+      }
+    }
+    return result
+  }
+
+  // Handle uint/int types - convert to BigInt
+  if (paramType.startsWith("uint") || paramType.startsWith("int")) {
+    if (typeof processed === "string" && /^\d+$/.test(processed)) {
+      return BigInt(processed)
+    }
+    if (typeof processed === "number") {
+      return BigInt(processed)
+    }
+  }
+
+  return processed
+}
 
 function convertArgs(abi: Abi, functionName: string, args: unknown[]): unknown[] {
   const fn = abi.find(
@@ -13,24 +58,11 @@ function convertArgs(abi: Abi, functionName: string, args: unknown[]): unknown[]
     const input = fn.inputs[i]
     if (!input) return arg
 
-    let processedArg = parseStringifiedArray(arg)
-
-    if (input.type.endsWith("[]")) {
-      if (Array.isArray(processedArg)) {
-        processedArg = processedArg.map(parseStringifiedArray)
-      }
-    }
-
-    if (input.type.startsWith("uint") || input.type.startsWith("int")) {
-      if (typeof processedArg === "string" && /^\d+$/.test(processedArg)) {
-        return BigInt(processedArg)
-      }
-      if (typeof processedArg === "number") {
-        return BigInt(processedArg)
-      }
-    }
-
-    return processedArg
+    return convertValue(
+      arg,
+      input.type,
+      "components" in input ? (input.components as readonly AbiParameter[]) : undefined
+    )
   })
 }
 
@@ -61,9 +93,11 @@ export function buildTransaction(
   agentId: string,
   params: ExecuteParams
 ): UnsignedTransaction {
-  const contract = config.contracts[params.contractAddress]
+  // Normalize address to lowercase for lookup (keys are lowercase)
+  const normalizedAddress = params.contractAddress.toLowerCase() as `0x${string}`
+  const contract = config.contracts[normalizedAddress]
   if (!contract) {
-    throw new Error(`Contract ${params.contractAddress} not found`)
+    throw new Error(`Contract ${params.contractAddress} not found in config`)
   }
 
   const targetCalldata = encodeContractCall(
