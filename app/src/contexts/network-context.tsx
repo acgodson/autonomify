@@ -158,9 +158,6 @@ export function NetworkProvider({
   )
 }
 
-// =============================================================================
-// HOOK
-// =============================================================================
 
 export function useNetwork() {
   const context = useContext(NetworkContext)
@@ -170,9 +167,6 @@ export function useNetwork() {
   return context
 }
 
-// =============================================================================
-// COMPONENTS
-// =============================================================================
 
 /**
  * Network mode toggle button for the navbar.
@@ -207,6 +201,8 @@ interface ChainSelectorProps {
   onChange: (chainId: number) => void
   showOnlyReady?: boolean
   className?: string
+  compact?: boolean
+  disabled?: boolean
 }
 
 export function ChainSelector({
@@ -214,6 +210,8 @@ export function ChainSelector({
   onChange,
   showOnlyReady = true,
   className = "",
+  compact = false,
+  disabled = false,
 }: ChainSelectorProps) {
   const { chains, readyChains, isLoading } = useNetwork()
 
@@ -222,7 +220,7 @@ export function ChainSelector({
   if (isLoading) {
     return (
       <div className={`bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-zinc-500 ${className}`}>
-        Loading chains...
+        ...
       </div>
     )
   }
@@ -230,7 +228,7 @@ export function ChainSelector({
   if (displayChains.length === 0) {
     return (
       <div className={`bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-zinc-500 ${className}`}>
-        No chains available
+        No chains
       </div>
     )
   }
@@ -239,19 +237,21 @@ export function ChainSelector({
     <select
       value={value ?? ""}
       onChange={(e) => onChange(parseInt(e.target.value, 10))}
+      disabled={disabled}
       className={`
         bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white
         focus:outline-none focus:ring-2 focus:ring-blue-500
+        disabled:opacity-50 disabled:cursor-not-allowed
         ${className}
       `}
     >
       <option value="" disabled>
-        Select chain
+        {compact ? "Chain" : "Select chain"}
       </option>
       {displayChains.map((chain) => (
         <option key={chain.id} value={chain.id}>
-          {chain.name}
-          {!chain.ready && " (not ready)"}
+          {compact ? chain.shortName : chain.name}
+          {!chain.ready && " (!)"}
         </option>
       ))}
     </select>

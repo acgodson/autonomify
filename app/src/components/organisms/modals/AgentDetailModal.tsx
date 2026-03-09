@@ -179,7 +179,7 @@ export function AgentDetailModal({ agent, onClose, onOpenSetup }: AgentDetailMod
             ) : editingPolicy ? (
               <>
                 <div className="bg-zinc-800 rounded-xl p-4">
-                  <label className="text-xs text-zinc-500 block mb-2">Max Transaction Amount (ETH)</label>
+                  <label className="text-xs text-zinc-500 block mb-2">Max Transaction Amount (tokens)</label>
                   <input
                     type="text"
                     value={editForm.maxTxAmount}
@@ -262,7 +262,7 @@ export function AgentDetailModal({ agent, onClose, onOpenSetup }: AgentDetailMod
 
                 <div className="bg-zinc-800 rounded-xl p-4">
                   <div className="text-xs text-zinc-500 mb-1">Max Transaction Amount</div>
-                  <div className="text-white font-medium">{policy.maxTxAmount} ETH</div>
+                  <div className="text-white font-medium">{policy.maxTxAmount} tokens</div>
                 </div>
 
                 <div className="bg-zinc-800 rounded-xl p-4">

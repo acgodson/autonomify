@@ -86,7 +86,7 @@ export function LaunchedModal({ agent, onClose }: LaunchedModalProps) {
                   <div>
                     <div className="text-sm text-green-400 font-medium">Secured by Privy</div>
                     <div className="text-xs text-zinc-400 mt-1">
-                      Private keys are managed securely. All transactions route through the Autonomify Executor contract for audit trails.
+                      Keys managed securely with full audit trails.
                     </div>
                   </div>
                 </div>

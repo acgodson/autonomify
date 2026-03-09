@@ -413,12 +413,12 @@ for (const toolCall of response.choices[0].message.tool_calls || []) {
                       <div className="bg-zinc-800/50 rounded-lg p-3 flex justify-between items-center">
                         <div>
                           <div className="text-xs text-zinc-500">Test Amount</div>
-                          <code className="text-xs text-white">{testAmount.toFixed(4)} ETH</code>
+                          <code className="text-xs text-white">{testAmount.toFixed(4)} tokens</code>
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-zinc-500">Max Allowed</div>
                           <code className="text-xs text-green-400">
-                            {policy?.maxTxAmount || "1"} ETH
+                            {policy?.maxTxAmount || "1"} tokens
                           </code>
                         </div>
                       </div>

@@ -155,25 +155,42 @@ export default function Home() {
                 value={selectedChainId}
                 onChange={setSelectedChainId}
                 showOnlyReady={true}
-                className="bg-zinc-800 border border-zinc-700 rounded-xl px-5 py-5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27white%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3e%3cpolyline points=%276 9 12 15 18 9%27%3e%3c/polyline%3e%3c/svg%3e')] bg-[length:20px] bg-[right_1rem_center] bg-no-repeat pr-12"
+                disabled={!!resolver.contract}
+                compact={true}
+                className={`w-32 shrink-0 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-base appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27white%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3e%3cpolyline points=%276 9 12 15 18 9%27%3e%3c/polyline%3e%3c/svg%3e')] bg-[length:16px] bg-[right_0.5rem_center] bg-no-repeat pr-8 ${resolver.contract ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
 
-              <input
-                type="text"
-                value={resolver.address}
-                onChange={(e) => resolver.setAddress(e.target.value)}
-                placeholder="Paste contract address (0x...)"
-                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-6 py-5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-xl"
-                onKeyDown={(e) => e.key === "Enter" && handleAutonomify()}
-              />
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={resolver.address}
+                  onChange={(e) => resolver.setAddress(e.target.value)}
+                  placeholder="Paste contract address (0x...)"
+                  disabled={!!resolver.contract}
+                  className={`w-full bg-zinc-800 border border-zinc-700 rounded-xl px-6 py-5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-xl ${resolver.contract ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onKeyDown={(e) => e.key === "Enter" && !resolver.contract && handleAutonomify()}
+                />
+                {resolver.contract && (
+                  <button
+                    onClick={() => resolver.reset()}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white text-sm font-medium transition-colors"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
 
               <button
-                onClick={handleAutonomify}
+                onClick={() => resolver.contract ? modals.setShowLaunchModal(true) : handleAutonomify()}
                 disabled={resolver.loading}
-                className="flex items-center gap-3 bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:cursor-not-allowed text-zinc-900 font-semibold px-10 py-5 rounded-xl transition-all text-xl"
+                className={`flex items-center gap-3 font-semibold px-10 py-5 rounded-xl transition-all text-xl ${
+                  resolver.contract
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-900'
+                    : 'bg-amber-500 hover:bg-amber-400 disabled:bg-zinc-700 disabled:cursor-not-allowed text-zinc-900'
+                }`}
               >
                 <MagicWandIcon className="w-6 h-6" />
-                {resolver.loading ? "..." : "Autonomify"}
+                {resolver.loading ? "..." : resolver.contract ? "Launch Agent" : "Autonomify"}
               </button>
             </div>
 
@@ -251,62 +268,11 @@ export default function Home() {
               />
             </div>
 
-            <div className="bg-zinc-900/50 backdrop-blur rounded-2xl p-6 border border-zinc-800 mb-6">
-              <h2 className="text-lg font-medium mb-4">Launch Agent</h2>
-              <div className="grid grid-cols-3 gap-4">
-                <button
-                  onClick={() => modals.setShowLaunchModal(true)}
-                  className="flex flex-col items-center justify-center gap-2 bg-[#0088cc] hover:bg-[#0099dd] text-white font-medium py-5 px-4 rounded-xl transition-colors"
-                >
-                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69.01-.03.01-.14-.07-.2-.08-.06-.19-.04-.27-.02-.12.03-1.99 1.27-5.62 3.72-.53.36-1.01.54-1.44.53-.47-.01-1.38-.27-2.06-.49-.83-.27-1.49-.42-1.43-.88.03-.24.37-.49 1.02-.74 3.99-1.74 6.65-2.89 7.99-3.45 3.8-1.6 4.59-1.88 5.1-1.89.11 0 .37.03.54.17.14.12.18.28.2.45-.01.06.01.24 0 .38z"/>
-                  </svg>
-                  <span className="text-sm">Telegram</span>
-                </button>
-
-                <button
-                  disabled
-                  className="flex flex-col items-center justify-center gap-2 bg-zinc-800 text-zinc-500 font-medium py-5 px-4 rounded-xl cursor-not-allowed relative overflow-hidden"
-                >
-                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
-                  </svg>
-                  <span className="text-sm">Discord</span>
-                  <span className="absolute top-1 right-1 text-[10px] bg-zinc-700 px-1.5 py-0.5 rounded-full">Soon</span>
-                </button>
-
-                <button
-                  onClick={() => modals.setShowLaunchModal(true)}
-                  className="flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-zinc-900 font-medium py-5 px-4 rounded-xl transition-colors"
-                >
-                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m18 16 4-4-4-4" />
-                    <path d="m6 8-4 4 4 4" />
-                    <path d="m14.5 4-5 16" />
-                  </svg>
-                  <span className="text-sm">Self-Hosted</span>
-                </button>
-              </div>
-
-            </div>
           </>
         )}
       </div>
       </div>
 
-      <footer className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur border-t border-zinc-800 px-6 py-3 z-50">
-        <div className="max-w-5xl mx-auto flex items-center justify-center gap-8 text-sm">
-          <div className="text-zinc-500">
-            <span className="text-white font-medium">{agents.length}</span> agents
-          </div>
-          <div className="text-zinc-500">
-            <span className="text-white font-medium">{totalContracts}</span> contracts
-          </div>
-          <div className="text-zinc-500">
-            Base Sepolia
-          </div>
-        </div>
-      </footer>
 
       {modals.showAgentPanel && (
         <div className="fixed inset-0 z-50" onClick={() => modals.setShowAgentPanel(false)}>

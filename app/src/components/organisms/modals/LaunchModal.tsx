@@ -181,7 +181,7 @@ export function LaunchModal({
               </div>
               <div className="flex-1">
                 <div className="font-medium text-white">Telegram Bot</div>
-                <div className="text-sm text-zinc-400">Hosted agent with Privy wallet</div>
+                <div className="text-sm text-zinc-400">Managed wallet, instant setup</div>
               </div>
               <span className="text-zinc-500">→</span>
             </button>
@@ -209,7 +209,7 @@ export function LaunchModal({
               </div>
               <div className="flex-1">
                 <div className="font-medium text-white">Self-Hosted SDK</div>
-                <div className="text-sm text-zinc-400">Use your own wallet & infrastructure</div>
+                <div className="text-sm text-zinc-400">Your wallet, full control</div>
               </div>
               <span className="text-zinc-500">→</span>
             </button>
@@ -300,9 +300,9 @@ export function LaunchModal({
                     <div className="flex items-start gap-3">
                       <MagicWandIcon className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
                       <div>
-                        <div className="text-sm text-amber-400 font-medium">Self-Hosted Setup</div>
+                        <div className="text-sm text-amber-400 font-medium">SDK Integration</div>
                         <div className="text-xs text-zinc-400 mt-1">
-                          After creation, you&apos;ll get setup instructions with code snippets for Vercel AI SDK or OpenAI. Bring your own wallet.
+                          Get code snippets for Vercel AI or OpenAI SDK after creation.
                         </div>
                       </div>
                     </div>
@@ -321,7 +321,7 @@ export function LaunchModal({
                   </div>
 
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Max per transaction (ETH)</label>
+                    <label className="block text-xs text-zinc-500 mb-1">Max per transaction (tokens)</label>
                     <input
                       type="number"
                       step="0.01"

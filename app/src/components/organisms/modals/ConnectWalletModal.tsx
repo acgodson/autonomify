@@ -17,7 +17,7 @@ export function ConnectWalletModal({ onConnect, onClose, isConnecting }: Connect
         </div>
         <h2 className="text-xl font-semibold mb-2">Sign In to Autonomify</h2>
         <p className="text-zinc-400 text-sm mb-6">
-          Sign in with email, Google, or your existing wallet to create and manage your AI agents with a secure smart account.
+          Connect with email, Google, or wallet to launch AI agents.
         </p>
 
         <button

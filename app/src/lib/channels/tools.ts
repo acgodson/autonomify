@@ -3,7 +3,6 @@ import { z } from "zod"
 import { encodeFunctionData, getAddress, type Abi } from "viem"
 import {
   forVercelAI,
-  buildTransaction,
   getExplorerUrl,
   argsToArray,
   type AutonomifyExport,
@@ -22,6 +21,49 @@ export interface ToolContext {
   signedDelegation: string
   chainId: number
   rpcUrl: string
+}
+
+function normalizeArgsForTuple(
+  fn: { inputs: Array<{ name: string; type: string; components?: unknown[] }> },
+  args: Record<string, unknown>,
+  abi?: readonly unknown[]
+): Record<string, unknown> {
+  if (fn.inputs.length !== 1) return args
+
+  const input = fn.inputs[0]
+  if (input.type !== "tuple" || !input.name) return args
+  if (args[input.name] !== undefined) return args
+
+  let components = input.components as Array<{ name: string }> | undefined
+
+  if (!components && abi) {
+    const abiFunction = abi.find(
+      (item: any) => item.type === "function" && item.name === fn.inputs[0]?.name
+    ) as any
+    if (!abiFunction) {
+      const parentFn = abi.find(
+        (item: any) => item.type === "function" &&
+        item.inputs?.length === 1 &&
+        item.inputs[0]?.type === "tuple" &&
+        item.inputs[0]?.name === input.name
+      ) as any
+      if (parentFn?.inputs?.[0]?.components) {
+        components = parentFn.inputs[0].components
+      }
+    }
+  }
+
+  if (!components) return args
+
+  const componentNames = components.map(c => c.name).filter(Boolean)
+  const hasComponentFields = componentNames.some(name => args[name] !== undefined)
+
+  if (hasComponentFields) {
+    console.log(`[Tools] Auto-wrapping args in "${input.name}" for tuple function`)
+    return { [input.name]: args }
+  }
+
+  return args
 }
 
 export function formatCREError(result: CREResult): string {
@@ -49,20 +91,16 @@ export function formatCREError(result: CREResult): string {
 }
 
 export function createAgentTools(ctx: ToolContext) {
-  // Import SDK read-only helpers
-  const { prompt } = forVercelAI({
+  forVercelAI({
     export: ctx.exportData,
     agentId: ctx.agentIdBytes,
     rpcUrl: ctx.rpcUrl,
-    submitTx: async () => "", // Not used - we handle write txs manually
+    submitTx: async () => "",
   })
 
-  // Helper to check if a function is read-only
   const isReadOnly = (fn: { stateMutability: string }) =>
     fn.stateMutability === "view" || fn.stateMutability === "pure"
 
-  // Execute tool - handles both read and write operations
-  // For write operations, we pass RAW calldata to CRE (not executor-wrapped)
   const executeTool = tool({
     description: `Execute a smart contract function via Autonomify.`,
     parameters: z.object({
@@ -71,7 +109,7 @@ export function createAgentTools(ctx: ToolContext) {
       args: z.record(z.unknown()).default({}).describe("Named arguments as object"),
       value: z.string().optional().describe("Native token value in ETH"),
     }),
-    execute: async ({ contractAddress, functionName, args = {}, value }) => {
+    execute: async ({ contractAddress, functionName, args = {} }) => {
       const contractKey = contractAddress.toLowerCase() as `0x${string}`
       const contractData = ctx.exportData.contracts[contractKey]
 
@@ -84,8 +122,23 @@ export function createAgentTools(ctx: ToolContext) {
         return { success: false, error: `Function ${functionName} not found` }
       }
 
-      // Normalize args (addresses, etc.)
-      const normalizedArgs = Object.entries(args).reduce((acc, [key, val]) => {
+      if (fn.inputs.length > 0 && Object.keys(args).length === 0) {
+        const requiredParams = fn.inputs.map((i: any) => {
+          if (i.type === "tuple" && i.components) {
+            const fields = i.components.map((c: any) => c.name).join(", ")
+            return `${i.name}: { ${fields} }`
+          }
+          return `${i.name} (${i.type})`
+        }).join(", ")
+        return {
+          success: false,
+          error: `Missing required arguments. This function needs: ${requiredParams}. Please provide all required parameters.`
+        }
+      }
+
+      const wrappedArgs = normalizeArgsForTuple(fn, args, contractData.abi)
+
+      const normalizedArgs = Object.entries(wrappedArgs).reduce((acc, [key, val]) => {
         if (typeof val === "string" && val.match(/^0x[a-fA-F0-9]{40}$/)) {
           acc[key] = getAddress(val)
         } else {
@@ -96,10 +149,8 @@ export function createAgentTools(ctx: ToolContext) {
 
       const argsArray = argsToArray(ctx.exportData, contractKey, functionName, normalizedArgs)
 
-      // Quoter functions are technically nonpayable but should be called as read-only
       const isQuoterFunction = functionName.startsWith("quote")
       if (isReadOnly(fn) || isQuoterFunction) {
-        // Read-only call - use RPC directly
         const { createPublicClient, http, formatUnits } = await import("viem")
         const client = createPublicClient({ transport: http(ctx.rpcUrl) })
 
@@ -118,7 +169,6 @@ export function createAgentTools(ctx: ToolContext) {
             return { success: true, result: `${formatted} ${symbol}`, raw: result.toString() }
           }
 
-          // Serialize bigints
           const serialize = (val: unknown): unknown => {
             if (typeof val === "bigint") return val.toString()
             if (Array.isArray(val)) return val.map(serialize)
@@ -138,7 +188,6 @@ export function createAgentTools(ctx: ToolContext) {
         }
       }
 
-      // Write function - encode RAW calldata (NOT executor-wrapped)
       const calldata = encodeFunctionData({
         abi: contractData.abi as Abi,
         functionName,
@@ -148,12 +197,11 @@ export function createAgentTools(ctx: ToolContext) {
       console.log(`[CRE] Executing ${functionName} on ${contractKey.slice(0, 10)}...`)
       console.log(`[CRE] Calldata: ${calldata.slice(0, 20)}...`)
 
-      // Pass raw target and calldata to CRE - it will handle executor wrapping
       const result = await triggerCRE({
         userAddress: ctx.ownerAddress,
         agentId: ctx.agentIdBytes,
-        target: contractKey,  // Token address directly, NOT executor
-        calldata,             // Raw transfer calldata, NOT executor-wrapped
+        target: contractKey,
+        calldata,
         value: "0",
         permissionsContext: ctx.signedDelegation,
         simulateOnly: false,
@@ -187,7 +235,7 @@ export function createAgentTools(ctx: ToolContext) {
       args: z.record(z.unknown()).default({}).describe("Named arguments as object"),
       value: z.string().optional().describe("Native token value in ETH"),
     }),
-    execute: async ({ contractAddress, functionName, args = {}, value }) => {
+    execute: async ({ contractAddress, functionName, args = {} }) => {
       const contractKey = contractAddress.toLowerCase() as `0x${string}`
       const contractData = ctx.exportData.contracts[contractKey]
 
@@ -200,8 +248,27 @@ export function createAgentTools(ctx: ToolContext) {
         return { success: false, error: `Function ${functionName} not found` }
       }
 
-      // Normalize args
-      const normalizedArgs = Object.entries(args).reduce((acc, [key, val]) => {
+      console.log(`[Simulate] Function ${functionName}:`, JSON.stringify(fn, null, 2))
+      console.log(`[Simulate] Args before wrap:`, JSON.stringify(args, null, 2))
+
+      if (fn.inputs.length > 0 && Object.keys(args).length === 0) {
+        const requiredParams = fn.inputs.map((i: any) => {
+          if (i.type === "tuple" && i.components) {
+            const fields = i.components.map((c: any) => c.name).join(", ")
+            return `${i.name}: { ${fields} }`
+          }
+          return `${i.name} (${i.type})`
+        }).join(", ")
+        return {
+          success: false,
+          error: `Missing required arguments. This function needs: ${requiredParams}. Please provide the swap parameters including tokenIn, tokenOut, amountIn, fee, recipient, amountOutMinimum, and sqrtPriceLimitX96.`
+        }
+      }
+
+      const wrappedArgs = normalizeArgsForTuple(fn, args, contractData.abi)
+      console.log(`[Simulate] Args after wrap:`, JSON.stringify(wrappedArgs, null, 2))
+
+      const normalizedArgs = Object.entries(wrappedArgs).reduce((acc, [key, val]) => {
         if (typeof val === "string" && val.match(/^0x[a-fA-F0-9]{40}$/)) {
           acc[key] = getAddress(val)
         } else {
@@ -212,19 +279,17 @@ export function createAgentTools(ctx: ToolContext) {
 
       const argsArray = argsToArray(ctx.exportData, contractKey, functionName, normalizedArgs)
 
-      // Encode RAW calldata (NOT executor-wrapped)
       const calldata = encodeFunctionData({
         abi: contractData.abi as Abi,
         functionName,
         args: argsArray,
       })
 
-      // Pass raw target and calldata to CRE for simulation
       const result = await triggerCRE({
         userAddress: ctx.ownerAddress,
         agentId: ctx.agentIdBytes,
-        target: contractKey,  // Token address directly
-        calldata,             // Raw calldata
+        target: contractKey,
+        calldata,
         value: "0",
         permissionsContext: ctx.signedDelegation,
         simulateOnly: true,
