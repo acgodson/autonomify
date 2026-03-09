@@ -33,6 +33,7 @@ hackathon-starter-kit
 packages/autonomify-sdk/test
 autonomify-app/scripts
 autonomify-app/drizzle
+app/scripts/
 
 # presentation files
 presentation/
