@@ -26,7 +26,10 @@ export async function POST(
     }
 
     const bot = getTelegramBot(agent)
-    const handler = webhookCallback(bot, "std/http")
+    // Increase timeout to 60 seconds to accommodate LLM + CRE processing time
+    const handler = webhookCallback(bot, "std/http", {
+      timeoutMilliseconds: 60_000,
+    })
 
     return handler(request)
   } catch (error) {

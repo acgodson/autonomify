@@ -1,5 +1,6 @@
 import { tool } from "ai"
 import { z } from "zod"
+import { encodeFunctionData, getAddress, type Abi } from "viem"
 import {
   forVercelAI,
   buildTransaction,
@@ -48,31 +49,133 @@ export function formatCREError(result: CREResult): string {
 }
 
 export function createAgentTools(ctx: ToolContext) {
-  const { tool: executeTool } = forVercelAI({
+  // Import SDK read-only helpers
+  const { prompt } = forVercelAI({
     export: ctx.exportData,
     agentId: ctx.agentIdBytes,
     rpcUrl: ctx.rpcUrl,
-    submitTx: async (tx: any) => {
+    submitTx: async () => "", // Not used - we handle write txs manually
+  })
+
+  // Helper to check if a function is read-only
+  const isReadOnly = (fn: { stateMutability: string }) =>
+    fn.stateMutability === "view" || fn.stateMutability === "pure"
+
+  // Execute tool - handles both read and write operations
+  // For write operations, we pass RAW calldata to CRE (not executor-wrapped)
+  const executeTool = tool({
+    description: `Execute a smart contract function via Autonomify.`,
+    parameters: z.object({
+      contractAddress: z.string().describe("Contract address (0x...)"),
+      functionName: z.string().describe("Function name"),
+      args: z.record(z.unknown()).default({}).describe("Named arguments as object"),
+      value: z.string().optional().describe("Native token value in ETH"),
+    }),
+    execute: async ({ contractAddress, functionName, args = {}, value }) => {
+      const contractKey = contractAddress.toLowerCase() as `0x${string}`
+      const contractData = ctx.exportData.contracts[contractKey]
+
+      if (!contractData) {
+        return { success: false, error: `Contract ${contractAddress} not found` }
+      }
+
+      const fn = contractData.functions.find((f: any) => f.name === functionName)
+      if (!fn) {
+        return { success: false, error: `Function ${functionName} not found` }
+      }
+
+      // Normalize args (addresses, etc.)
+      const normalizedArgs = Object.entries(args).reduce((acc, [key, val]) => {
+        if (typeof val === "string" && val.match(/^0x[a-fA-F0-9]{40}$/)) {
+          acc[key] = getAddress(val)
+        } else {
+          acc[key] = val
+        }
+        return acc
+      }, {} as Record<string, unknown>)
+
+      const argsArray = argsToArray(ctx.exportData, contractKey, functionName, normalizedArgs)
+
+      // Quoter functions are technically nonpayable but should be called as read-only
+      const isQuoterFunction = functionName.startsWith("quote")
+      if (isReadOnly(fn) || isQuoterFunction) {
+        // Read-only call - use RPC directly
+        const { createPublicClient, http, formatUnits } = await import("viem")
+        const client = createPublicClient({ transport: http(ctx.rpcUrl) })
+
+        try {
+          const result = await client.readContract({
+            address: contractKey,
+            abi: contractData.abi as Abi,
+            functionName,
+            args: argsArray,
+          })
+
+          if (functionName === "balanceOf" && typeof result === "bigint") {
+            const decimals = (contractData.metadata?.decimals as number) || 18
+            const symbol = (contractData.metadata?.symbol as string) || "tokens"
+            const formatted = formatUnits(result, decimals)
+            return { success: true, result: `${formatted} ${symbol}`, raw: result.toString() }
+          }
+
+          // Serialize bigints
+          const serialize = (val: unknown): unknown => {
+            if (typeof val === "bigint") return val.toString()
+            if (Array.isArray(val)) return val.map(serialize)
+            if (val && typeof val === "object") {
+              const obj: Record<string, unknown> = {}
+              for (const [k, v] of Object.entries(val)) {
+                obj[k] = serialize(v)
+              }
+              return obj
+            }
+            return val
+          }
+
+          return { success: true, result: serialize(result) }
+        } catch (err) {
+          return { success: false, error: err instanceof Error ? err.message : "Read failed" }
+        }
+      }
+
+      // Write function - encode RAW calldata (NOT executor-wrapped)
+      const calldata = encodeFunctionData({
+        abi: contractData.abi as Abi,
+        functionName,
+        args: argsArray,
+      })
+
+      console.log(`[CRE] Executing ${functionName} on ${contractKey.slice(0, 10)}...`)
+      console.log(`[CRE] Calldata: ${calldata.slice(0, 20)}...`)
+
+      // Pass raw target and calldata to CRE - it will handle executor wrapping
       const result = await triggerCRE({
         userAddress: ctx.ownerAddress,
         agentId: ctx.agentIdBytes,
-        target: tx.to,
-        calldata: tx.data,
-        value: tx.value?.toString() || "0",
+        target: contractKey,  // Token address directly, NOT executor
+        calldata,             // Raw transfer calldata, NOT executor-wrapped
+        value: "0",
         permissionsContext: ctx.signedDelegation,
         simulateOnly: false,
       })
 
+      console.log(`[CRE] Result: ${JSON.stringify(result)}`)
+
       if (!result.success) {
-        throw new Error(formatCREError(result))
+        return { success: false, error: formatCREError(result) }
       }
 
       if (result.mode !== "execution") {
-        throw new Error("Unexpected simulation result")
+        return { success: false, error: "Unexpected simulation result" }
       }
 
       const explorerUrl = result.txHash ? getExplorerUrl(ctx.chainId, result.txHash) : null
-      return explorerUrl ? `${result.txHash} (view: ${explorerUrl})` : result.txHash || ""
+      return {
+        success: true,
+        txHash: result.txHash,
+        explorerUrl,
+        message: "Transaction executed",
+      }
     },
   })
 
@@ -97,21 +200,32 @@ export function createAgentTools(ctx: ToolContext) {
         return { success: false, error: `Function ${functionName} not found` }
       }
 
-      const argsArray = argsToArray(ctx.exportData, contractKey, functionName, args)
+      // Normalize args
+      const normalizedArgs = Object.entries(args).reduce((acc, [key, val]) => {
+        if (typeof val === "string" && val.match(/^0x[a-fA-F0-9]{40}$/)) {
+          acc[key] = getAddress(val)
+        } else {
+          acc[key] = val
+        }
+        return acc
+      }, {} as Record<string, unknown>)
 
-      const tx = buildTransaction(ctx.exportData, ctx.agentIdBytes, {
-        contractAddress: contractKey,
+      const argsArray = argsToArray(ctx.exportData, contractKey, functionName, normalizedArgs)
+
+      // Encode RAW calldata (NOT executor-wrapped)
+      const calldata = encodeFunctionData({
+        abi: contractData.abi as Abi,
         functionName,
         args: argsArray,
-        value,
       })
 
+      // Pass raw target and calldata to CRE for simulation
       const result = await triggerCRE({
         userAddress: ctx.ownerAddress,
         agentId: ctx.agentIdBytes,
-        target: tx.to,
-        calldata: tx.data,
-        value: tx.value?.toString() || "0",
+        target: contractKey,  // Token address directly
+        calldata,             // Raw calldata
+        value: "0",
         permissionsContext: ctx.signedDelegation,
         simulateOnly: true,
       })

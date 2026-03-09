@@ -1,3 +1,4 @@
+import { getAddress, isAddress } from "viem"
 import type { AutonomifyExport, FunctionExport } from "../types"
 
 export function findFunction(
@@ -51,11 +52,26 @@ export function parseStringifiedArray(value: unknown): unknown {
 }
 
 export function normalizeAddress(address: string): `0x${string}` {
-  const clean = address.toLowerCase()
-  if (!clean.startsWith("0x") || clean.length !== 42) {
-    throw new Error(`Invalid address: ${address}`)
+  // Use viem's getAddress to get proper checksum
+  return getAddress(address) as `0x${string}`
+}
+
+/**
+ * Recursively normalize address values in args based on ABI parameter types.
+ * This ensures addresses pass viem's checksum validation.
+ */
+function normalizeAddressValues(value: unknown, paramType: string): unknown {
+  // Handle address type
+  if (paramType === "address" && typeof value === "string" && isAddress(value)) {
+    return getAddress(value)
   }
-  return clean as `0x${string}`
+
+  // Handle address arrays
+  if (paramType === "address[]" && Array.isArray(value)) {
+    return value.map((v) => (typeof v === "string" && isAddress(v) ? getAddress(v) : v))
+  }
+
+  return value
 }
 
 export function argsToArray(
@@ -75,6 +91,8 @@ export function argsToArray(
     if (value === undefined) {
       throw new Error(`Missing argument: ${name}`)
     }
-    return parseStringifiedArray(value)
+    // Parse stringified arrays first, then normalize addresses
+    const parsed = parseStringifiedArray(value)
+    return normalizeAddressValues(parsed, input.type)
   })
 }

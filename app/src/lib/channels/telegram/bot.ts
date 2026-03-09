@@ -155,13 +155,23 @@ export function getOrCreateBot(agent: Agent): Bot {
       }
     }
 
-    await ctx.replyWithChatAction("typing")
+    // Send typing indicator but don't await - it can fail due to network issues
+    ctx.replyWithChatAction("typing").catch(() => {
+      // Ignore typing indicator failures - they don't affect message processing
+    })
 
     try {
       const response = await processWithLLM(agent, chatId, text)
-      const sentMessage = await ctx.reply(response, { parse_mode: "Markdown" }).catch(() =>
-        ctx.reply(response)
-      )
+
+      // Try to send with markdown, fallback to plain text
+      const sentMessage = await ctx.reply(response, { parse_mode: "Markdown" }).catch(async (err) => {
+        // If markdown fails, try plain text
+        console.log("Markdown reply failed, trying plain text:", err.message)
+        return ctx.reply(response).catch((plainErr) => {
+          console.error("Plain text reply also failed:", plainErr.message)
+          throw plainErr
+        })
+      })
 
       await addAssistantMessage(agent.id, chatId, response, {
         channelMessageId: sentMessage.message_id.toString(),
@@ -173,7 +183,10 @@ export function getOrCreateBot(agent: Agent): Bot {
         const errorMsg = err instanceof Error ? err.message : "Unknown error"
         await markMessageError(messageId, errorMsg)
       }
-      await ctx.reply("Sorry, I encountered an error processing your request.")
+      // Try to notify user of error, but don't fail if network is down
+      await ctx.reply("Sorry, I encountered an error processing your request.").catch(() => {
+        console.error("Failed to send error message to user")
+      })
     }
   })
 
@@ -189,6 +202,10 @@ async function processWithLLM(
   const systemPrompt = buildAgentPrompt(agent)
   const history = await getConversationHistory(agent.id, chatId)
   const exportData = buildAgentExport(agent)
+
+  console.log(`[LLM] Processing message: "${userMessage}"`)
+  console.log(`[LLM] History length: ${history.length} messages`)
+  console.log(`[LLM] Available contracts: ${Object.keys(exportData.contracts).join(", ")}`)
 
   const contract = agent.contracts[0]
   const chainId = contract?.chainId || DEFAULT_CHAIN_ID
@@ -218,6 +235,8 @@ async function processWithLLM(
   let loopDetected = false
   const abortController = new AbortController()
 
+  console.log(`[LLM] Starting generateText with ${Object.keys(tools).length} tools:`, Object.keys(tools))
+
   const result = await generateText({
     model: openai("gpt-4o"),
     system: systemPrompt,
@@ -225,25 +244,40 @@ async function processWithLLM(
     tools,
     maxSteps: 5,
     abortSignal: abortController.signal,
-    onStepFinish: ({ toolCalls }) => {
+    onStepFinish: ({ toolCalls, toolResults, text }) => {
+      console.log(`[LLM] Step finished:`)
+      console.log(`[LLM]   - Tool calls: ${toolCalls?.length || 0}`)
+      console.log(`[LLM]   - Text: ${text ? text.slice(0, 100) + "..." : "none"}`)
+
       if (toolCalls && toolCalls.length > 0) {
         for (const tc of toolCalls) {
+          console.log(`[LLM]   - Tool: ${tc.toolName}`)
+          console.log(`[LLM]   - Args: ${JSON.stringify(tc.args).slice(0, 200)}`)
+
           const callSig = `${tc.toolName}:${JSON.stringify(tc.args)}`
           const sameCallCount = toolCallHistory.filter((h) => h === callSig).length
           toolCallHistory.push(callSig)
 
           if (sameCallCount >= 1) {
-            console.log("Loop detected - aborting:", callSig)
+            console.log("[LLM] Loop detected - aborting:", callSig)
             loopDetected = true
             abortController.abort()
           }
         }
       }
+
+      if (toolResults && toolResults.length > 0) {
+        for (const tr of toolResults) {
+          console.log(`[LLM]   - Result for ${tr.toolName}: ${JSON.stringify(tr.result).slice(0, 200)}`)
+        }
+      }
     },
   }).catch((err) => {
     if (err.name === "AbortError" || loopDetected) {
+      console.log("[LLM] Aborted due to loop detection")
       return { text: "", steps: [] }
     }
+    console.error("[LLM] Error:", err)
     throw err
   })
 
@@ -253,6 +287,9 @@ async function processWithLLM(
   } else {
     responseText = result.text || "I processed your request but have no response."
   }
+
+  console.log(`[LLM] Final response length: ${responseText.length} chars`)
+  console.log(`[LLM] Total tool calls made: ${toolCallHistory.length}`)
 
   await pruneOldMessages(agent.id, chatId)
   return responseText
