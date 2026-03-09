@@ -5,7 +5,8 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsup",
-    "test": "tsx src/test-enclave.ts"
+    "test": "tsx src/test-enclave.ts",
+    "deploy": "./deploy.sh"
   },
   "dependencies": {
     "@aztec/bb.js": "1.2.0",

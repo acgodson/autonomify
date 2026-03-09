@@ -55,11 +55,28 @@ export async function generatePolicyProof(
         const bb = await Barretenberg.new({ threads: 1 });
         console.log("[PROOF-GEN] Barretenberg initialized successfully");
 
-        console.log("[PROOF-GEN] Step 3: Converting wei to whole tokens for u64 compatibility");
-        const WEI_PER_TOKEN = BigInt(10 ** 18);
-        const wholeTokenAmount = tx.amount / WEI_PER_TOKEN;
-        const wholeTokenMaxAmount = BigInt(config.maxAmount?.limit || 0) / WEI_PER_TOKEN;
-        console.log("[PROOF-GEN] Whole token amount:", wholeTokenAmount.toString(), "(wei:", tx.amount.toString(), ")");
+        console.log("[PROOF-GEN] Step 3: Converting wei to scaled units for u64 compatibility");
+        // Use 10^8 divisor to maintain precision for sub-token amounts while fitting in u64
+        // This gives us 10 decimal places of precision
+        // u64 max is ~18.4 x 10^18, so with 10^8 divisor we can handle amounts up to ~1.8 x 10^11 tokens
+        const SCALE_DIVISOR = BigInt(10 ** 8);
+        const scaledAmount = tx.amount / SCALE_DIVISOR;
+        const scaledMaxAmount = BigInt(config.maxAmount?.limit || 0) / SCALE_DIVISOR;
+        console.log("[PROOF-GEN] Scaled amount:", scaledAmount.toString(), "(wei:", tx.amount.toString(), ")");
+        console.log("[PROOF-GEN] Scaled max amount:", scaledMaxAmount.toString(), "(wei:", config.maxAmount?.limit || 0, ")");
+
+        // CRITICAL: Early policy enforcement check BEFORE proof generation
+        if (config.maxAmount?.enabled) {
+            console.log("[PROOF-GEN] Checking maxAmount policy...");
+            console.log("[PROOF-GEN]   Transaction amount (wei):", tx.amount.toString());
+            console.log("[PROOF-GEN]   Policy limit (wei):", config.maxAmount.limit.toString());
+            if (tx.amount > BigInt(config.maxAmount.limit)) {
+                const errorMsg = `Policy violation: amount ${tx.amount.toString()} exceeds limit ${config.maxAmount.limit.toString()}`;
+                console.log("[PROOF-GEN] ❌", errorMsg);
+                throw new Error(errorMsg);
+            }
+            console.log("[PROOF-GEN] ✓ Amount within limit");
+        }
 
         console.log("[PROOF-GEN] Step 4: Creating Field elements");
         const timestampFr = new Fr(BigInt(tx.timestamp));
@@ -68,8 +85,8 @@ export async function generatePolicyProof(
         const recipientFr = new Fr(BigInt(tx.recipient));
         console.log("[PROOF-GEN] Recipient Fr created");
         
-        const amountFr = new Fr(wholeTokenAmount);
-        console.log("[PROOF-GEN] Amount Fr created (whole tokens)");
+        const amountFr = new Fr(scaledAmount);
+        console.log("[PROOF-GEN] Amount Fr created (scaled)");
         
         const userHashFr = new Fr(BigInt(userAddressHash));
         console.log("[PROOF-GEN] User hash Fr created");
@@ -85,11 +102,11 @@ export async function generatePolicyProof(
         console.log("[PROOF-GEN] Step 6: Preparing circuit inputs");
         
         const inputs = {
-            tx_amount: wholeTokenAmount.toString(),
+            tx_amount: scaledAmount.toString(),
             tx_recipient: BigInt(tx.recipient).toString(),
             tx_timestamp: tx.timestamp.toString(),
 
-            max_amount: wholeTokenMaxAmount.toString(),
+            max_amount: scaledMaxAmount.toString(),
             allowed_start_hour: (config.timeWindow?.startHour || 0).toString(),
             allowed_end_hour: (config.timeWindow?.endHour || 24).toString(),
 

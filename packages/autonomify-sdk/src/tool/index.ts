@@ -92,10 +92,12 @@ After simulation, report whether it would succeed and estimated gas.
 
 ### Rules
 
-1. Arrays stay as arrays: \`["0x...", "0x..."]\`
-2. Numbers as strings: \`"1000000000000000000"\`
-3. Use exact parameter names from function signature
-4. \`value\` in native units: \`"0.01"\` = 0.01 of native token
+1. **CRITICAL: ALWAYS provide args** - Never call with empty args \`{}\`. Extract all required values from the user's request or conversation context.
+2. Arrays stay as arrays: \`["0x...", "0x..."]\`
+3. Numbers as strings: \`"1000000000000000000"\`
+4. Use exact parameter names from function signature
+5. \`value\` in native units: \`"0.01"\` = 0.01 of native token
+6. For swaps: use the owner's wallet address as \`recipient\`, set \`sqrtPriceLimitX96\` to "0", use fee "3000" (0.3%) by default
 
 ### Struct/Tuple Parameters
 

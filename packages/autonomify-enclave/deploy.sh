@@ -4,13 +4,13 @@
 # One-click deployment to AWS Nitro Enclave
 #
 # Usage: ./deploy.sh [EC2_IP] [KEY_PATH]
-#   EC2_IP: IP address of the EC2 instance (default: 35.159.224.254)
+#   EC2_IP: IP address of the EC2 instance (default: 3.71.199.191)
 #   KEY_PATH: Path to SSH key 
 #
 
 set -e
 
-EC2_IP="${1:-35.159.224.254}"
+EC2_IP="${1:-3.71.199.191}"
 KEY_PATH="${2:-$HOME/uburu-routing-key.pem}"
 GHCR_IMAGE="ghcr.io/acgodson/autonomify/enclave:latest"
 ENCLAVE_NAME="enclave"
