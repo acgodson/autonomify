@@ -13,6 +13,7 @@ interface UseContractResolverReturn {
   error: string | null
   resolve: (chainId: number) => Promise<void>
   clear: () => void
+  reset: () => void
 }
 
 export function useContractResolver(): UseContractResolverReturn {
@@ -91,5 +92,6 @@ export function useContractResolver(): UseContractResolverReturn {
     error,
     resolve,
     clear,
+    reset: clear,
   }
 }
