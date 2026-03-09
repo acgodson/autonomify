@@ -155,19 +155,19 @@ const TENDERLY_RPC_URLS: Record<number, string> = {
  * Normalize a Tenderly ABI parameter to standard format (handles nested tuples)
  */
 function normalizeParam(param: TenderlyAbiParam): AbiParameter {
-  const result: AbiParameter = {
-    name: param.name,
-    type: param.type as AbiParameter["type"],
-  }
-
   // Handle tuple types with components (structs)
-  if (param.type === "tuple" || param.type.startsWith("tuple[")) {
-    if (param.components && param.components.length > 0) {
-      result.components = param.components.map(normalizeParam)
-    }
+  if ((param.type === "tuple" || param.type.startsWith("tuple[")) && param.components && param.components.length > 0) {
+    return {
+      name: param.name,
+      type: param.type,
+      components: param.components.map(normalizeParam),
+    } as AbiParameter
   }
 
-  return result
+  return {
+    name: param.name,
+    type: param.type,
+  } as AbiParameter
 }
 
 /**
