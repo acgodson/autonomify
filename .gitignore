@@ -41,3 +41,7 @@ presentation/
 contracts/artifacts/
 contracts/cache/
 contracts/typechain-types/
+
+# CRE config with secrets (use config.example.json as template)
+packages/autonomify-cre/executor/config.staging.json
+packages/autonomify-cre/executor/config.production.json

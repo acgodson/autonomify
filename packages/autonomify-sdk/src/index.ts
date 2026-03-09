@@ -84,8 +84,6 @@ export {
   getRpcUrls,
   getChainSummary,
   getChainSummaries,
-  getTenderlyRpc,
-  getVirtualTestnetRpc,
   hasTenderlySupport,
   getBestRpcUrl,
   type Chain,

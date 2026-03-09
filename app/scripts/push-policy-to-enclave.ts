@@ -10,7 +10,8 @@ import * as path from "path"
 dotenv.config({ path: path.join(__dirname, "../.env") })
 
 const USER_ADDRESS = process.argv[2] || "0x16e0e7141261bbf34b4707ced40ef0bb2f2a3720"
-const AGENT_ID = process.argv[3] || "test-agent-001"
+// CRE Test Bot agent ID bytes
+const AGENT_ID = process.argv[3] || "0xf282e595f2043e9da73b7907b8b3af06a69e5620aee69ce7e9796e2fd65e5beb"
 
 const ENCLAVE_URL = process.env.ENCLAVE_URL || "http://3.71.199.191:8001"
 
@@ -39,11 +40,11 @@ async function main() {
   console.log("  Agent ID:", AGENT_ID)
   console.log("")
 
-  // Policy config: 1 ETH max per tx, no time restrictions, no whitelist
+  // Policy config: 0.1 ETH max per tx, no time restrictions, no whitelist
   const policyConfig: PolicyConfig = {
     maxAmount: {
       enabled: true,
-      limit: 1000000000000000000, // 1 ETH in wei
+      limit: 100000000000000000, // 0.1 ETH in wei
     },
     timeWindow: {
       enabled: false,

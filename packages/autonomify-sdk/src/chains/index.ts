@@ -166,29 +166,11 @@ export function getChainSummaries(mode: NetworkMode = "all"): ChainSummary[] {
   }))
 }
 
-export function getTenderlyRpc(chainId: number): string | null {
-  const chain = CHAINS[chainId]
-  if (!chain?.tenderly?.rpcEnvVar) return null
-  return process.env[chain.tenderly.rpcEnvVar] ?? null
-}
-
-export function getVirtualTestnetRpc(chainId: number): string | null {
-  const chain = CHAINS[chainId]
-  if (!chain?.tenderly?.virtualTestnetRpcEnvVar) return null
-  return process.env[chain.tenderly.virtualTestnetRpcEnvVar] ?? null
-}
-
 export function hasTenderlySupport(chainId: number): boolean {
   const chain = CHAINS[chainId]
   return !!chain?.tenderly
 }
 
-/**
- * Get the best RPC URL for a chain.
- * Prefers Tenderly RPC if available, falls back to public RPCs.
- */
 export function getBestRpcUrl(chainId: number): string {
-  const tenderlyRpc = getTenderlyRpc(chainId)
-  if (tenderlyRpc) return tenderlyRpc
   return getRpcUrl(chainId)
 }
