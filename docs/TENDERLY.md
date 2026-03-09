@@ -57,9 +57,11 @@ flowchart TB
 
 ```json
 {
-  "tenderlyRpc": "https://base-sepolia.gateway.tenderly.co/...",
-  "virtualTestnetRpc": "https://virtual.base-sepolia.rpc.tenderly.co/..."
+  "tenderlyRpc": "https://base-sepolia.gateway.tenderly.co/<GATEWAY_KEY>",
+  "virtualTestnetRpc": "https://virtual.base-sepolia.eu.rpc.tenderly.co/b4f2be99-9418-431a-863f-95d1d80bbb04"
 }
 ```
 
-See [`config.staging.json`](../packages/autonomify-cre/executor/config.staging.json)
+- **Virtual TestNet ID:** `b4f2be99-9418-431a-863f-95d1d80bbb04`
+
+See [`config.staging.json`](../packages/autonomify-cre/executor/config.example.json)

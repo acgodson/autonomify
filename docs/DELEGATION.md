@@ -56,4 +56,5 @@ Traditional delegations use on-chain caveats (spend limits, whitelists). Autonom
 |---------|---------|
 | Base Sepolia | `0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3` |
 
-See [base-sepolia.address](base-sepolia.address) for all contracts.
+See [base-sepolia.address](base-sepolia.address) for demo contracts and transaction hashes
+

@@ -12,21 +12,8 @@ Explorer: https://sepolia.basescan.org
 | DelegationManager | `0xdb9B1e94B5b69Df7e401DDbedE43491141047dB3` |
 | CRE Forwarder | `0x82300bd7c3958625581cc2F77bC6464dcEcDF3e5` |
 
-## Tokens
 
-| Token | Address | Faucet |
-|-------|---------|--------|
-| LINK | `0xE4aB69C077896252FAFBD49EFD26B5D171A32410` | [Chainlink Faucet](https://faucets.chain.link/base-sepolia) |
-| WETH | `0x4200000000000000000000000000000000000006` | Wrap native ETH |
-
-## DEX Contracts (Uniswap V3)
-
-| Contract | Address |
-|----------|---------|
-| SwapRouter02 | `0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4` |
-| QuoterV2 | `0xC5290058841028F1614F3A6F0F5816cAd0df5E27` |
-
-## Demo Contracts
+## Contracts used in Demo 
 
 | Use Case | Contract | Address |
 |----------|----------|---------|
@@ -34,3 +21,10 @@ Explorer: https://sepolia.basescan.org
 | DEX Quote | QuoterV2 | `0xC5290058841028F1614F3A6F0F5816cAd0df5E27` |
 | DEX Swap | SwapRouter02 | `0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4` |
 | Wrap ETH | WETH | `0x4200000000000000000000000000000000000006` |
+
+## Demo Transactions (CRE Execution)
+
+- LINK Transfer: https://sepolia.basescan.org/tx/0x31992dc771eee69001dba92806a00cc9347e63dfa1b02b296f27c30941be5ea4
+- ERC20 Approval: https://sepolia.basescan.org/tx/0x2630b8e03a63113493249a754fac00206c9bb0767c6c59dd73a861c1c5e20386
+- LINK → WETH Swap: https://sepolia.basescan.org/tx/0xfca25219dc91521d910a7fc848c33aa6e9302d023dc2cdb876d2ee4ecc0f46b5
+- LINK Transfer: https://sepolia.basescan.org/tx/0xcf124a13db84c7c4321f96d296b129baf6a4e49e2412aee0e027c43fdf3078ac
