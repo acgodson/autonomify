@@ -106,8 +106,22 @@ bun run test
 
 **Run specific test categories:**
 ```bash
-bun run test:balance    # Token balance checks
-bun run test:quote      # DEX quotes with tuple encoding
+bun run test:balance    # Token balance checks (no CRE server needed)
+bun run test:quote      # DEX quotes with tuple encoding (no CRE server needed)
+bun run test:simulate   # Simulate transfer via CRE (requires CRE server)
+bun run test:execute    # Execute transfer via CRE (requires CRE server)
+```
+
+**For CRE tests (simulate/execute)**, start the CRE server first in a separate terminal:
+```bash
+cd packages/autonomify-cre/executor
+bun run serve
+```
+
+Then run the CRE tests:
+```bash
+bun run test:simulate   # Dry-run a transfer
+bun run test:execute    # Actually execute a transfer on-chain
 ```
 ---
 

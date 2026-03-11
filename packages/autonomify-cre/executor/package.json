@@ -9,6 +9,7 @@
     "test:balance": "bun run test-agent.ts balance",
     "test:quote": "bun run test-agent.ts quote",
     "test:simulate": "bun run test-agent.ts simulate",
+    "test:execute": "bun run test-agent.ts execute",
     "serve": "bun run serve.ts"
   },
   "license": "UNLICENSED",

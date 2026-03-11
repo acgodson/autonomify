@@ -439,13 +439,22 @@ const SCENARIOS: Scenario[] = [
     messages: ["Get me a quote to swap 0.1 LINK for WETH"],
   },
 
-  // Simulation (CRE in simulation mode) - requires CRE server running
-  // Commented out for basic testing
-  // {
-  //   name: "Simulate transfer",
-  //   category: "simulate",
-  //   messages: ["Simulate sending 0.001 LINK to 0xdead000000000000000000000000000000000001"],
-  // },
+  // CRE Simulation - requires CRE server running (bun run serve)
+  {
+    name: "Simulate transfer",
+    category: "simulate",
+    messages: ["Simulate sending 0.001 LINK to 0xf2750684eb187fF9f82e2F980f6233707ef5768c"],
+  },
+
+  // CRE Execution - requires CRE server running (bun run serve)
+  {
+    name: "Execute transfer",
+    category: "execute",
+    messages: [
+      "Transfer 0.001 LINK to 0xf2750684eb187fF9f82e2F980f6233707ef5768c",
+      "Yes, confirm the transfer",
+    ],
+  },
 ]
 
 // ==================== TEST RUNNER ====================
