@@ -51,7 +51,7 @@ Edit `executor/config.staging.json`:
   "authorizedKey": "0xYOUR_WALLET_ADDRESS",
   "chainSelector": "10344971235874465080",
   "tenderlyRpc": "https://base-sepolia.gateway.tenderly.co/YOUR_KEY",
-  "virtualTestnetRpc": "https://virtual.base-sepolia.eu.rpc.tenderly.co/YOUR_VNET_ID"
+  "virtualTestnetRpc": "https://virtual.base-sepolia.eu.rpc.tenderly.co/b4f2be99-9418-431a-863f-95d1d80bbb04"
 }
 ```
 ```bash

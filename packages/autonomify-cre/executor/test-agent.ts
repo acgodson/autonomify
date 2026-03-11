@@ -217,6 +217,12 @@ Functions:
 Use autonomify_execute for all contract calls. The tool handles both read and write operations.
 Use autonomify_simulate to test write operations before executing.
 
+IMPORTANT: When calling tools, always pass args as an object with named keys matching the function parameters.
+Examples:
+- balanceOf: args: { "account": "0x..." }
+- transfer: args: { "to": "0x...", "amount": "1000000000000000000" }
+- quoteExactInputSingle: args: { "params": { "tokenIn": "0x...", ... } }
+
 Be concise. Show balances in human format (e.g., "0.5 LINK" not "500000000000000000").
 `
 
@@ -229,11 +235,12 @@ function createTools() {
     description: "Execute a smart contract function. For view functions, returns result. For write functions, executes via CRE.",
     parameters: z.object({
       contractAddress: z.string().describe("Contract address (0x...)"),
-      functionName: z.string().describe("Function name"),
+      functionName: z.string().describe("Function name (e.g. 'transfer', not 'transfer(address,uint256)')"),
       args: z.record(z.unknown()).default({}).describe("Named arguments as object"),
     }),
-    execute: async ({ contractAddress, functionName, args = {} }) => {
+    execute: async ({ contractAddress, functionName: rawFunctionName, args = {} }) => {
       const addr = contractAddress.toLowerCase() as `0x${string}`
+      const functionName = rawFunctionName.split("(")[0]
 
       // Find contract
       const contract = Object.values(CONTRACTS).find(
@@ -356,11 +363,12 @@ function createTools() {
     description: "Simulate a transaction WITHOUT executing. Use to verify a transaction would succeed.",
     parameters: z.object({
       contractAddress: z.string().describe("Contract address (0x...)"),
-      functionName: z.string().describe("Function name"),
+      functionName: z.string().describe("Function name (e.g. 'transfer', not 'transfer(address,uint256)')"),
       args: z.record(z.unknown()).default({}).describe("Named arguments as object"),
     }),
-    execute: async ({ contractAddress, functionName, args = {} }) => {
+    execute: async ({ contractAddress, functionName: rawFunctionName, args = {} }) => {
       const addr = contractAddress.toLowerCase() as `0x${string}`
+      const functionName = rawFunctionName.split("(")[0]
 
       const contract = Object.values(CONTRACTS).find(
         (c) => c.address.toLowerCase() === addr
